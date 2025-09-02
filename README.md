@@ -106,21 +106,21 @@ python mcp_server.py
 streamlit run app.py
 
 - ### 🛡️ What It Checks
-  - **Google Drive**
+   - **Google Drive**
 
-  - Files shared with “Anyone with the link”
+       - Files shared with “Anyone with the link”
 
-  - Sensitive keywords in file names
+       - Sensitive keywords in file names
 
-- **Gmail**
+   - **Gmail**
 
-  - Email subjects with sensitive keywords (e.g., SSN, password, confidential)
+       - Email subjects with sensitive keywords (e.g., SSN, password, confidential)
 
-  - AI Summaries
+       - AI Summaries
 
-  - Risk overview
+       - Risk overview
 
-  - Recommendations for remediation
+       - Recommendations for remediation
 
 ### 📈 Why This Project Is Different
 Most privacy compliance tools either:
@@ -140,15 +140,15 @@ This project is:
 ✅ User-friendly → Streamlit makes it interactive and visual
 
 ### 🔮 Future Roadmap
-   -Add connectors for Notion, Slack, Dropbox.
+   - Add connectors for Notion, Slack, Dropbox.
 
-   -Expand compliance coverage: HIPAA, PCI-DSS.
+   - Expand compliance coverage: HIPAA, PCI-DSS.
 
-   -Add auto-remediation (e.g., restrict file permissions automatically).
+   - Add auto-remediation (e.g., restrict file permissions automatically).
 
-   -Enable scheduling (e.g., daily/weekly scans).
+   - Enable scheduling (e.g., daily/weekly scans).
 
-   -Export compliance reports as PDF.
+   - Export compliance reports as PDF.
 
 ### 🤝 Contributing
 Pull requests are welcome!
