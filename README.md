@@ -80,6 +80,7 @@ This allows quick remediation: restrict file permissions, flag risky emails, and
 
 ### 1. Clone the repo
 git clone https://github.com/Keerthikach/MCP_Privacy_Compliance_Agent.git
+
 cd MCP_Privacy_Compliance_Agent
 
 ### 2. Install dependencies
