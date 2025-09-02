@@ -87,13 +87,16 @@ cd MCP_Privacy_Compliance_Agent
 
 ### 3. Set up Google API credentials
 Go to Google Cloud Console.
+
 Create OAuth2 credentials for Gmail & Drive API.
+
 Download credentials.json and place it in the project root.
 
 ### 4. Set up Perplexity API
 Get your Perplexity API key.
 
 Add it to .env:
+
 PERPLEXITY_API_KEY=your_api_key_here
 
 ### 5. Run the MCP Server
@@ -102,22 +105,22 @@ python mcp_server.py
 ### 6. Launch the Streamlit Dashboard
 streamlit run app.py
 
-### 🛡️ What It Checks
-Google Drive
+- ### 🛡️ What It Checks
+  - **Google Drive**
 
-Files shared with “Anyone with the link”
+  - Files shared with “Anyone with the link”
 
-Sensitive keywords in file names
+  - Sensitive keywords in file names
 
-Gmail
+- **Gmail**
 
-Email subjects with sensitive keywords (e.g., SSN, password, confidential)
+  - Email subjects with sensitive keywords (e.g., SSN, password, confidential)
 
-AI Summaries
+  - AI Summaries
 
-Risk overview
+  - Risk overview
 
-Recommendations for remediation
+  - Recommendations for remediation
 
 ### 📈 Why This Project Is Different
 Most privacy compliance tools either:
@@ -137,18 +140,19 @@ This project is:
 ✅ User-friendly → Streamlit makes it interactive and visual
 
 ### 🔮 Future Roadmap
-Add connectors for Notion, Slack, Dropbox.
+   -Add connectors for Notion, Slack, Dropbox.
 
-Expand compliance coverage: HIPAA, PCI-DSS.
+   -Expand compliance coverage: HIPAA, PCI-DSS.
 
-Add auto-remediation (e.g., restrict file permissions automatically).
+   -Add auto-remediation (e.g., restrict file permissions automatically).
 
-Enable scheduling (e.g., daily/weekly scans).
+   -Enable scheduling (e.g., daily/weekly scans).
 
-Export compliance reports as PDF.
+   -Export compliance reports as PDF.
 
 ### 🤝 Contributing
 Pull requests are welcome!
+
 If you want to add a new MCP tool (e.g., Slack integration), just follow the MCP contract structure (tools/list, tools/call).
 
 
