@@ -22,18 +22,7 @@ Unlike typical compliance tools, this one runs **locally** on your machine, powe
 
 Here’s how the pieces fit together:
 
-+-------------------+ +--------------------+ +-----------------+
-| Gmail / Drive | <---> | MCP Server | <---> | AI Analysis |
-| (via OAuth2 API) | | (tools/list, | | (Perplexity |
-| | | tools/call) | | Sonar API) |
-+-------------------+ +--------------------+ +-----------------+
-|
-v
-+-------------------+
-| Streamlit UI |
-| Dashboard & Ctrl |
-+-------------------+
-
+Gmail / Drive (via OAuth2 API) → MCP Server (tools/list, tools/call) → AI Analysis (Perplexity Sonar API) → Streamlit UI (Dashboard & Control)
 
 ### Flow Explained:
 1. **OAuth2 Authentication**  
