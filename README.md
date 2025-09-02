@@ -79,31 +79,31 @@ This allows quick remediation: restrict file permissions, flag risky emails, and
 ## 🚀 Getting Started
 
 ### 1. Clone the repo
-git clone https://github.com/Keerthikach/MCP_Privacy_Compliance_Agent.git
+- git clone https://github.com/Keerthikach/MCP_Privacy_Compliance_Agent.git
 
-cd MCP_Privacy_Compliance_Agent
+- cd MCP_Privacy_Compliance_Agent
 
 ### 2. Install dependencies
 
 ### 3. Set up Google API credentials
-Go to Google Cloud Console.
+- Go to Google Cloud Console.
 
-Create OAuth2 credentials for Gmail & Drive API.
+- Create OAuth2 credentials for Gmail & Drive API.
 
-Download credentials.json and place it in the project root.
+- Download credentials.json and place it in the project root.
 
 ### 4. Set up Perplexity API
-Get your Perplexity API key.
+- Get your Perplexity API key.
 
-Add it to .env:
+- Add it to .env:
 
-PERPLEXITY_API_KEY=your_api_key_here
+- PERPLEXITY_API_KEY=your_api_key_here
 
 ### 5. Run the MCP Server
-python mcp_server.py
+- python mcp_server.py
 
 ### 6. Launch the Streamlit Dashboard
-streamlit run app.py
+- streamlit run app.py
 
 - ### 🛡️ What It Checks
    - **Google Drive**
@@ -116,11 +116,11 @@ streamlit run app.py
 
        - Email subjects with sensitive keywords (e.g., SSN, password, confidential)
 
-       - AI Summaries
+   - AI Summaries
 
-       - Risk overview
+   - Risk overview
 
-       - Recommendations for remediation
+   - Recommendations for remediation
 
 ### 📈 Why This Project Is Different
 Most privacy compliance tools either:
