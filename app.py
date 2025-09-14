@@ -1,9 +1,7 @@
 # app.py — Streamlit UI for your MCP server (mvp.py)
-# - Uses THIS Python (sys.executable) for the server (no interpreter selector)
-# - Preflight checks/installs: mcp, google-api-python-client, google-auth-httplib2, google-auth-oauthlib
+# - Uses THIS Python (sys.executable) to spawn your MCP server process (no import)
 # - MCP flow: initialize -> notifications/initialized -> tools/call
-# - Live progress from stderr: "Processing file X/Y" / "Processing message X/Y"
-# - Renders final JSON neatly + optional OpenAI analysis of the findings
+# - Shows only two tabs: (1) Metadata sent to AI, (2) AI Analysis (Perplexity/OpenAI-compatible)
 
 import os
 import sys
@@ -18,18 +16,18 @@ from typing import Any, Dict, Optional, Tuple, List
 import streamlit as st
 from dotenv import load_dotenv
 
-# Optional OpenAI analysis (kept from your original file)
+# Optional OpenAI-compatible client (Perplexity works here via base_url)
 try:
     from openai import OpenAI
 except Exception:
-    OpenAI = None  # We'll guard usage below
+    OpenAI = None  # guard usage in UI
 
 # ---------------------------------------------------------------------
 # Setup / ENV
 # ---------------------------------------------------------------------
-load_dotenv()  # Load .env if present (for OPENAI_API_KEY)
-
+load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+PPLX_API_KEY = os.getenv("PPLX_API_KEY") or st.secrets.get("PPLX_API_KEY")
 
 RE_PROGRESS = re.compile(r"Processing\s+(message|file)\s+(\d+)\s*/\s*(\d+)", re.I)
 REQUIRED_PIP_PKGS = [
@@ -40,16 +38,14 @@ REQUIRED_PIP_PKGS = [
 ]
 
 # ---------------------------------------------------------------------
-# Utilities: module checks + installer (against THIS Python)
+# Utilities: module checks + installer
 # ---------------------------------------------------------------------
 def verify_current_python_has_modules(mod_imports: List[str]) -> Tuple[bool, str]:
-    """
-    Verify that THIS Python (sys.executable) can import given modules.
-    mod_imports should be importable module names (not pip names).
-    """
+    """Verify THIS Python (sys.executable) can import the given modules."""
     probe = ["import sys"]
     for m in mod_imports:
         probe.append(f"import {m}; print('{m}=' + str(getattr({m}, '__version__', 'installed')))")
+
     cmd = [sys.executable, "-c", "; ".join(probe)]
     try:
         out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True).strip()
@@ -58,7 +54,6 @@ def verify_current_python_has_modules(mod_imports: List[str]) -> Tuple[bool, str
         return False, (e.output or "").strip() or "Import failed (no output)."
 
 def install_required_packages(pkgs: List[str]) -> str:
-    """Install pip packages into THIS Python (sys.executable)."""
     cmd = [sys.executable, "-m", "pip", "install", *pkgs]
     try:
         out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
@@ -67,7 +62,7 @@ def install_required_packages(pkgs: List[str]) -> str:
         return e.output or str(e)
 
 # ---------------------------------------------------------------------
-# MCP stdio runner (matches your server’s interface in mvp.py)
+# MCP stdio runner (connects to your mvp.py via stdin/stdout)
 # ---------------------------------------------------------------------
 class MCPRunner:
     def __init__(self, server_path: str, rpc_timeout: float = 600.0):
@@ -89,11 +84,11 @@ class MCPRunner:
 
     def start(self):
         if self.proc and self.proc.poll() is None:
-            return  # already running
+            return
         if not os.path.exists(self.server_path):
             raise FileNotFoundError(f"Server not found: {self.server_path}")
 
-        python_exe = sys.executable  # use SAME interpreter as Streamlit
+        python_exe = sys.executable
         self.proc = subprocess.Popen(
             [python_exe, self.server_path],
             stdin=subprocess.PIPE,
@@ -110,13 +105,13 @@ class MCPRunner:
             assert self.proc and self.proc.stdout
             for line in self.proc.stdout:
                 self._stdout_q.put(line.rstrip("\n"))
-            self._stdout_q.put(None)  # EOF
+            self._stdout_q.put(None)
 
         def _read_stderr():
             assert self.proc and self.proc.stderr
             for line in self.proc.stderr:
                 self._stderr_q.put(line.rstrip("\n"))
-            self._stderr_q.put(None)  # EOF
+            self._stderr_q.put(None)
 
         self._stdout_thread = threading.Thread(target=_read_stdout, daemon=True)
         self._stderr_thread = threading.Thread(target=_read_stderr, daemon=True)
@@ -253,10 +248,10 @@ class MCPRunner:
         return resp["result"]
 
 # ---------------------------------------------------------------------
-# Streamlit UI
+# Streamlit UI (sidebar unchanged)
 # ---------------------------------------------------------------------
 st.set_page_config(page_title="Privacy Checker", page_icon="🔒", layout="wide")
-st.title("🔒 Privacy Checker with MCP ")
+st.title("🔒 Privacy Checker with MCP")
 st.caption(f"Python: `{sys.executable}`")
 
 # Detect available server file(s)
@@ -267,13 +262,12 @@ if not available_servers:
 
 with st.sidebar:
     server_path = st.selectbox("MCP server file", available_servers, index=0)
-    tool = st.selectbox("Tool", ["get_privacy_summary", "check_gmail_privacy", "check_drive_privacy"], index=0)
+    tool = st.selectbox("Tool", ["check_gmail_privacy", "get_privacy_summary", "check_drive_privacy"], index=0)
     timeout = st.number_input("Timeout (seconds)", min_value=30, max_value=7200, value=600, step=30)
+    use_ai = st.checkbox("Generate AI explanation (Perplexity Sonar)", value=True)
 
-    use_ai = st.checkbox("Generate an AI explanation of the findings", value=True)
     st.markdown("---")
     st.markdown("**Environment check**:")
-
     ok, msg = verify_current_python_has_modules([
         "mcp",
         "googleapiclient.discovery",
@@ -304,25 +298,22 @@ with st.sidebar:
     st.markdown("---")
     cols = st.columns(2)
     with cols[0]:
-        run_btn = st.button("▶️ Run Privacy Scan", type="primary", disabled=not can_run)
+        run_btn = st.button("▶️ Run", type="primary", disabled=not can_run)
     with cols[1]:
         stop_btn = st.button("⏹ Stop Server")
 
-# Persist state across reruns
+# Persist state
 if "runner" not in st.session_state:
     st.session_state.runner = None
 if "payload" not in st.session_state:
     st.session_state.payload = None
-if "progress" not in st.session_state:
-    st.session_state.progress = {"kind": "", "cur": 0, "tot": 0, "pct": 0}
 if "logbuf" not in st.session_state:
     st.session_state.logbuf = ""
 if "last_error" not in st.session_state:
     st.session_state.last_error = None
 
-progress_bar = st.progress(st.session_state.progress.get("pct", 0), text="Idle")
+progress_bar = st.progress(0, text="Idle")
 status_text = st.empty()
-
 with st.expander("Server Logs", expanded=False):
     live_log = st.empty()
 
@@ -332,14 +323,13 @@ def progress_cb(kind: str, cur: Optional[int], tot: Optional[int], raw_line: str
         lines = (st.session_state.logbuf + raw_line + "\n").splitlines()[-200:]
         st.session_state.logbuf = "\n".join(lines)
         live_log.code(st.session_state.logbuf, language="text")
-    # Progress X/Y
+    # Show progress if server logs "Processing message X/Y" or "Processing file X/Y"
     if kind in ("message", "file") and isinstance(cur, int) and isinstance(tot, int) and tot > 0:
         pct = int(cur / tot * 100)
-        st.session_state.progress = {"kind": kind, "cur": cur, "tot": tot, "pct": pct}
         progress_bar.progress(pct, text=f"{kind.title()} progress: {cur}/{tot} ({pct}%)")
         status_text.write(f"**{kind.title()}**: {cur}/{tot}")
 
-# Stop server button
+# Stop server
 if stop_btn and st.session_state.runner:
     try:
         st.session_state.runner.stop()
@@ -350,20 +340,15 @@ if stop_btn and st.session_state.runner:
         st.session_state.last_error = f"Stop error: {e}"
         status_text.error(st.session_state.last_error)
 
-# Main "Run Privacy Scan" flow
+# Run button
 if run_btn:
     st.session_state.payload = None
-    st.session_state.progress = {"kind": "", "cur": 0, "tot": 0, "pct": 0}
     st.session_state.logbuf = ""
     st.session_state.last_error = None
     progress_bar.progress(0, text="Starting…")
     status_text.write("Launching MCP server…")
 
-    # (Re)create runner if server file changed
-    need_new_runner = (
-        not st.session_state.runner
-        or st.session_state.runner.server_path != server_path
-    )
+    need_new_runner = (not st.session_state.runner) or (st.session_state.runner.server_path != server_path)
     if need_new_runner and st.session_state.runner:
         st.session_state.runner.stop()
         st.session_state.runner = None
@@ -378,28 +363,41 @@ if run_btn:
         status_text.write("Initializing MCP (complete OAuth in your browser if prompted)…")
         runner.ensure_initialized(progress_cb=progress_cb)
 
-        with st.spinner(f"Running tool: {tool}"):
+        with st.spinner("Calling tool…"):
+            # IMPORTANT: for your new Gmail metadata flow, set tool to "check_gmail_privacy"
             result = runner.call_tool(tool, {}, progress_cb=progress_cb)
 
-        # Extract JSON payload from TextContent your server returns
+        # Extract JSON payload from MCP TextContent
+        # Extract JSON payload from MCP TextContent
         content = result.get("content", [])
-        payload: Any = result
         if content and isinstance(content, list) and content[0].get("type") == "text":
             txt = content[0].get("text", "")
             try:
                 payload = json.loads(txt)
             except Exception:
                 payload = txt
-
-        st.session_state.payload = payload
-
-        # Finish the progress bar nicely
-        prog = st.session_state.progress
-        if prog["tot"]:
-            progress_bar.progress(100, text=f"Done: {prog['cur']}/{prog['tot']}")
         else:
-            progress_bar.progress(100, text="Done")
-        status_text.success("Scan complete ✅")
+            payload = result
+
+        # Normalize to a single struct we will send to AI:
+        # metadata_for_ai = {"gmail": <obj or None>, "drive": <obj or None>}
+        if tool == "get_privacy_summary" and isinstance(payload, dict):
+            metadata_for_ai = {
+                "gmail": payload.get("gmail_raw"),
+                "drive": payload.get("drive_raw"),
+            }
+        elif tool == "check_gmail_privacy":
+            metadata_for_ai = {"gmail": payload, "drive": None}
+        elif tool == "check_drive_privacy":
+            metadata_for_ai = {"gmail": None, "drive": payload}
+        else:
+            # fallback: treat entire payload as one blob
+            metadata_for_ai = {"gmail": payload, "drive": None}
+
+        st.session_state.payload = metadata_for_ai
+        progress_bar.progress(100, text="Done")
+        status_text.success("Completed ✅")
+
 
     except TimeoutError as e:
         st.session_state.last_error = f"Timeout: {e}"
@@ -411,125 +409,150 @@ if run_btn:
         progress_bar.progress(0, text="Error")
 
 # ---------------------------------------------------------------------
-# Results + optional AI analysis
+# RESULTS — Only two tabs: (1) Metadata, (2) AI Analysis
 # ---------------------------------------------------------------------
 payload = st.session_state.payload
 if payload is not None:
-    tabs = st.tabs(["Summary", "Tables", "Recommendations", "Raw JSON", "AI Analysis" if OpenAI else "AI Analysis (not installed)"])
+    tabs = st.tabs(["Metadata sent to AI", "AI Analysis"])
 
+    # ---- Tab 1: show EXACT JSON going into the model ----
     with tabs[0]:
-        st.subheader("Summary")
-        if isinstance(payload, dict):
-            cols = st.columns(4)
-            def metric(col, label, value):
-                with col:
-                    st.metric(label, value)
-
-            # get_privacy_summary style
-            if "overall_risk_level" in payload:
-                metric(cols[0], "Overall Risk", str(payload.get("overall_risk_level")).title())
-                metric(cols[1], "Total Issues", payload.get("total_privacy_issues", 0))
-                metric(cols[2], "Gmail Risk", str(payload.get("gmail_analysis", {}).get("risk_level", "—")).title())
-                metric(cols[3], "Drive Risk", str(payload.get("drive_analysis", {}).get("risk_level", "—")).title())
-            else:
-                # single-tool styles
-                if "risk_level" in payload:
-                    metric(cols[0], "Risk Level", str(payload.get("risk_level")).title())
-                if "total_messages_checked" in payload:
-                    metric(cols[1], "Messages Checked", payload.get("total_messages_checked", 0))
-                    metric(cols[2], "Risky Messages", payload.get("risky_messages_found", 0))
-                if "total_files_checked" in payload:
-                    metric(cols[1], "Files Checked", payload.get("total_files_checked", 0))
-                    metric(cols[2], "Risky Filenames", payload.get("risky_files_found", 0))
-                    metric(cols[3], "Public Files", payload.get("public_files_found", 0))
-
-    with tabs[1]:
-        st.subheader("Details & Tables")
-        if isinstance(payload, dict):
-            # Gmail-only format
-            if "findings" in payload and isinstance(payload["findings"], list):
-                st.write("**Gmail Findings**")
-                st.json(payload["findings"])
-            # Drive-only format
-            if "findings" in payload and isinstance(payload["findings"], dict):
-                f = payload["findings"]
-                for k in ["sensitive_filenames", "public_files", "overshared_files"]:
-                    if k in f:
-                        st.write(f"**Drive: {k.replace('_',' ').title()}**")
-                        st.json(f[k])
-            # Summary format
-            if "gmail_analysis" in payload:
-                st.write("**Gmail Analysis**")
-                st.json(payload["gmail_analysis"])
-            if "drive_analysis" in payload:
-                st.write("**Drive Analysis**")
-                st.json(payload["drive_analysis"])
-
-    with tabs[2]:
-        st.subheader("Recommendations")
-        recs = None
-        if isinstance(payload, dict):
-            recs = payload.get("top_recommendations") or payload.get("recommendations")
-        if recs:
-            for r in recs:
-                st.markdown(f"- {r}")
-        else:
-            st.info("No recommendations found in payload.")
-
-    with tabs[3]:
-        st.subheader("Raw JSON")
+        st.subheader("Metadata")
+        st.caption("Below is the exact JSON that will be sent to the AI model.")
         st.json(payload)
         st.download_button(
-            label="Download JSON",
+            label="Download metadata JSON",
             data=json.dumps(payload, indent=2),
-            file_name=f"{tool}_result.json",
+            file_name="metadata.json",
             mime="application/json",
         )
 
-    # Optional AI analysis using your original approach
-    with tabs[4]:
+    # ---- Tab 2: AI Analysis ----
+    with tabs[1]:
         st.subheader("AI Analysis")
         if not use_ai:
             st.info("AI analysis disabled in the sidebar.")
+        elif not OpenAI:
+            st.warning("The 'openai' package is not installed in this environment.")
         else:
             pplx_key = os.getenv("PPLX_API_KEY") or st.secrets.get("PPLX_API_KEY")
             if not pplx_key:
                 st.warning("Perplexity API key not found. Set PPLX_API_KEY in your env or Streamlit secrets.")
             else:
                 try:
-                    # Perplexity uses OpenAI-compatible API; just set base_url and your PPLX key.
                     client = OpenAI(api_key=pplx_key, base_url="https://api.perplexity.ai")
+                    model_name = "sonar"  # or "sonar-pro" if you have access
 
-                    findings_text = json.dumps(payload, indent=2)
+                    # payload is always: {"gmail": <obj or None>, "drive": <obj or None>}
+                    gmail_meta = payload.get("gmail")
+                    drive_meta = payload.get("drive")
 
-                    with st.spinner("Generating AI explanation (Perplexity Sonar)…"):
+                    # Helper to call AI
+                    def ai_analyze(title: str, data_obj: Any, instructions: str) -> str:
+                        data_txt = json.dumps(data_obj, indent=2)
                         resp = client.chat.completions.create(
-                            model="sonar",  # or "sonar-pro"
+                            model=model_name,
                             messages=[
-                                {
-                                    "role": "system",
-                                    "content": (
-                                        "You are a privacy compliance assistant. Analyze these Gmail/Drive scan results "
-                                        "and explain possible GDPR/CCPA risks in simple terms. Provide prioritized, "
-                                        "actionable steps."
-                                    ),
-                                },
-                                {"role": "user", "content": findings_text},
+                                {"role": "system", "content": instructions},
+                                {"role": "user", "content": data_txt},
                             ],
-                            max_tokens=800,
+                            max_tokens=900,
                             temperature=0.3,
                         )
+                        return resp.choices[0].message.content
 
-                    st.success(resp.choices[0].message.content)
+                    # CASES:
+                    # 1) get_privacy_summary -> do (gmail AI) + (drive AI) -> overall AI
+                    # 2) check_gmail_privacy -> only gmail AI
+                    # 3) check_drive_privacy -> only drive AI
+
+                    if tool == "get_privacy_summary":
+                        st.write("### Step 1: Gmail Analysis")
+                        gmail_summary = ""
+                        if gmail_meta is not None:
+                            with st.spinner("Analyzing Gmail metadata…"):
+                                gmail_summary = ai_analyze(
+                                    "Gmail",
+                                    gmail_meta,
+                                    (
+                                        "You are a privacy compliance assistant. Analyze this Gmail metadata and flag "
+                                        "potential privacy risks (PII exposure, sensitive terms, risky senders, etc.). "
+                                        "Provide short, prioritized, actionable steps. If evidence is weak, say so."
+                                    ),
+                                )
+                            st.success(gmail_summary)
+                        else:
+                            st.info("No Gmail metadata provided.")
+
+                        st.write("### Step 2: Drive Analysis")
+                        drive_summary = ""
+                        if drive_meta is not None:
+                            with st.spinner("Analyzing Drive metadata…"):
+                                drive_summary = ai_analyze(
+                                    "Drive",
+                                    drive_meta,
+                                    (
+                                        "You are a privacy compliance assistant. Analyze this Google Drive metadata "
+                                        "(filenames, permissions, link-sharing, etc.) and flag privacy risks "
+                                        "(public links, oversharing, sensitive filenames). Provide prioritized steps."
+                                    ),
+                                )
+                            st.success(drive_summary)
+                        else:
+                            st.info("No Drive metadata provided.")
+
+                        st.write("### Step 3: Overall Summary")
+                        combined_prompt = {
+                            "gmail_analysis": gmail_summary,
+                            "drive_analysis": drive_summary,
+                        }
+                        with st.spinner("Generating overall summary…"):
+                            overall = ai_analyze(
+                                "Overall",
+                                combined_prompt,
+                                (
+                                    "You are a privacy lead. Read the Gmail and Drive analyses. Produce a concise "
+                                    "overall risk summary with (1) top 3 risks (2) severity score (low/med/high), "
+                                    "(3) immediate actions (next 24–48h), (4) follow-ups, and (5) any known unknowns."
+                                ),
+                            )
+                        st.success(overall)
+
+                    elif tool == "check_gmail_privacy":
+                        st.write("### Gmail Analysis")
+                        if gmail_meta is not None:
+                            with st.spinner("Analyzing Gmail metadata…"):
+                                gmail_summary = ai_analyze(
+                                    "Gmail",
+                                    gmail_meta,
+                                    (
+                                        "You are a privacy compliance assistant. Analyze this Gmail metadata and flag "
+                                        "privacy risks. Provide prioritized, actionable steps."
+                                    ),
+                                )
+                            st.success(gmail_summary)
+                        else:
+                            st.info("No Gmail metadata provided.")
+
+                    elif tool == "check_drive_privacy":
+                        st.write("### Drive Analysis")
+                        if drive_meta is not None:
+                            with st.spinner("Analyzing Drive metadata…"):
+                                drive_summary = ai_analyze(
+                                    "Drive",
+                                    drive_meta,
+                                    (
+                                        "You are a privacy compliance assistant. Analyze this Drive metadata and flag "
+                                        "privacy risks. Provide prioritized, actionable steps."
+                                    ),
+                                )
+                            st.success(drive_summary)
+                        else:
+                            st.info("No Drive metadata provided.")
+
+                    else:
+                        st.info("Unknown tool selection.")
 
                 except Exception as e:
                     st.error(f"Perplexity API error: {e}")
 
-# Footer
-# st.markdown("---")
-# st.markdown("**Tips**")
-# st.markdown("""
-# - First run may prompt Google OAuth in your browser (Gmail/Drive scopes).
-# - Progress bar updates when the server logs lines like `Processing file 31/50` or `Processing message 7/10`.
-# - If you see module errors, use the **Install missing packages** button in the sidebar.
-# """)
