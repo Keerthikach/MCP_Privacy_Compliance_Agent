@@ -1,4 +1,4 @@
-##🔒 Privacy Checker (MCP + Streamlit + Perplexity AI)##
+#🔒 Privacy Checker (MCP + Streamlit + Perplexity AI)#
 
 A local-first privacy checker that inspects your Gmail and Google Drive and generates actionable AI summaries in a clean Streamlit UI.
 
