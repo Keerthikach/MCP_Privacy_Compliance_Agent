@@ -843,3 +843,20 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+#bridge.py
+
+if __name__ == "__main__":
+    if len(sys.argv) > 2 and sys.argv[1] == "--analyze-url":
+        url = sys.argv[2]
+        # Here, you can pass the URL to OpenAI/Perplexity or your existing AI logic
+        # For now, just send a dummy JSON result
+        summary = {
+            "url": url,
+            "privacy_risk": "medium",
+            "summary": f"The site {url} may collect cookies or tracking data. Review its privacy policy before logging in."
+        }
+        print(json.dumps(summary))
+    else:
+        import asyncio
+        asyncio.run(main())
