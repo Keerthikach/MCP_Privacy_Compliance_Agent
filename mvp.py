@@ -16,6 +16,7 @@ from mcp import types
 from googleapiclient.discovery import build
 import google_auth_oauthlib.flow
 import google.auth.transport.requests
+from google.auth.exceptions import RefreshError
 
 # Configure logging to stderr so it doesn't interfere with MCP protocol
 logging.basicConfig(
@@ -33,47 +34,73 @@ SCOPES = [
 ]
 
 def get_google_service(api_name: str, api_version: str):
-    """Get authenticated Google service - THIS IS WHERE OAUTH HAPPENS"""
+    """Return a Google API service client.
+    - Loads cached creds from token.pickle
+    - Refreshes if expired; persists updated creds
+    - Re-runs OAuth if missing/invalid; persists new creds
+    """
+    token_path = "token.pickle"
+    creds_path = "credentials.json"
     creds = None
-    
-    # Load existing credentials
-    if os.path.exists("token.pickle"):
-        with open("token.pickle", "rb") as token:
-            creds = pickle.load(token)
-        logger.info("Loaded existing credentials")
-    
-    # Refresh or get new credentials
+
+    # Load cached token if present
+    if os.path.exists(token_path):
+        try:
+            with open(token_path, "rb") as f:
+                creds = pickle.load(f)
+            logger.info("Loaded existing credentials")
+        except Exception as e:
+            logger.warning(f"Failed to load token.pickle, will re-auth: {e}")
+            creds = None
+
+    def save_creds(updated_creds):
+        try:
+            with open(token_path, "wb") as f:
+                pickle.dump(updated_creds, f)
+            logger.info("Saved credentials to token.pickle")
+        except Exception as e:
+            logger.warning(f"Failed to write token.pickle: {e}")
+
+    def run_oauth_flow():
+        if not os.path.exists(creds_path):
+            raise FileNotFoundError(
+                "credentials.json not found. Create a Desktop app OAuth client in Google Cloud, "
+                "enable Gmail & Drive APIs, and download credentials.json to the project root."
+            )
+        logger.info("STARTING OAUTH FLOW - Browser will open now!")
+        flow = google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file(
+            creds_path, SCOPES
+        )
+        # If loopback fails on your machine, swap to: flow.run_console()
+        new_creds = flow.run_local_server(port=0)
+        logger.info("OAuth completed successfully!")
+        save_creds(new_creds)
+        return new_creds
+
+    # Need creds?
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            logger.info("Refreshing expired credentials")
-            creds.refresh(google.auth.transport.requests.Request())
+            # Try to refresh; if it works, PERSIST the updated creds
+            try:
+                logger.info("Refreshing expired credentials")
+                creds.refresh(google.auth.transport.requests.Request())
+                save_creds(creds)  # ✅ persist after refresh
+            except RefreshError as e:
+                logger.warning(f"Token refresh failed ({e}); deleting token and re-authing")
+                try:
+                    os.remove(token_path)
+                except Exception:
+                    pass
+                creds = run_oauth_flow()
         else:
-            if not os.path.exists("credentials.json"):
-                raise FileNotFoundError(
-                    "credentials.json not found. Please download it from Google Cloud Console.\n"
-                    "1. Go to https://console.cloud.google.com/\n"
-                    "2. Create/select a project\n"
-                    "3. Enable Gmail API and Drive API\n" 
-                    "4. Create OAuth 2.0 credentials\n"
-                    "5. Download as credentials.json"
-                )
-            
-            logger.info("STARTING OAUTH FLOW - Browser will open now!")
-            flow = google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file(
-                "credentials.json", SCOPES
-            )
-            # THIS IS WHERE THE BROWSER OPENS FOR OAUTH
-            creds = flow.run_local_server(port=0)
-            logger.info("OAuth completed successfully!")
-        
-        # Save credentials for next run
-        with open("token.pickle", "wb") as token:
-            pickle.dump(creds, token)
-        logger.info("Saved credentials for future use")
+            # No creds or no refresh token → do full OAuth
+            creds = run_oauth_flow()
     else:
         logger.info("Using existing valid credentials")
-    
-    return build(api_name, api_version, credentials=creds)
+
+    # Build the API client with verified creds
+    service = build(api_name, api_version, credentials=creds)
+    return service
 
 
 async def check_gmail_privacy():
