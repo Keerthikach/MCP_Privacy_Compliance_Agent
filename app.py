@@ -1,7 +1,5 @@
-# app.py — Streamlit UI for your MCP server (mvp.py)
-# - Uses THIS Python (sys.executable) to spawn your MCP server process (no import)
-# - MCP flow: initialize -> notifications/initialized -> tools/call
-# - Shows only two tabs: (1) Metadata sent to AI, (2) AI Analysis (Perplexity/OpenAI-compatible)
+# app.py — Streamlit UI for MCP server (mvp.py)
+# Multi-page app with dynamic navigation and hackathon-worthy UI
 
 import os
 import sys
@@ -16,14 +14,24 @@ from typing import Any, Dict, Optional, Tuple, List
 import streamlit as st
 from dotenv import load_dotenv
 
-# Optional OpenAI-compatible client (Perplexity works here via base_url)
+# Optional OpenAI-compatible client (Perplexity works via base_url)
 try:
     from openai import OpenAI
 except Exception:
-    OpenAI = None  # guard usage in UI
+    OpenAI = None
 
 # ---------------------------------------------------------------------
-# Setup / ENV
+# MUST BE FIRST: Page Configuration
+# ---------------------------------------------------------------------
+st.set_page_config(
+    page_title="Privacy Compliance Agent",
+    page_icon="🔒",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ---------------------------------------------------------------------
+# ENV Variables
 # ---------------------------------------------------------------------
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
@@ -38,10 +46,412 @@ REQUIRED_PIP_PKGS = [
 ]
 
 # ---------------------------------------------------------------------
+# CUSTOM CSS - HACKATHON-READY CYBERSECURITY THEME
+# ---------------------------------------------------------------------
+def apply_custom_css():
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono&display=swap');
+    
+    /* Global theme */
+    :root {
+        --neon-green: #00ff9d;
+        --cyber-blue: #00d4ff;
+        --danger-red: #ff3864;
+        --warning-amber: #ffa500;
+        --bg-primary: #0a0e27;
+        --bg-secondary: #141b3d;
+        --bg-tertiary: #1a2341;
+        --text-primary: #e0e6f0;
+        --text-muted: #8b95b0;
+        --glow-green: rgba(0, 255, 157, 0.4);
+        --glow-blue: rgba(0, 212, 255, 0.4);
+    }
+    
+    * {
+        font-family: 'Inter', sans-serif;
+    }
+    
+    code, pre {
+        font-family: 'JetBrains Mono', monospace !important;
+    }
+    
+    /* Main app background */
+    .stApp {
+        background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
+        background-attachment: fixed;
+    }
+    
+    /* Hide default menu */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Hero section styling */
+    .hero-container {
+        background: linear-gradient(135deg, rgba(0, 255, 157, 0.1) 0%, rgba(0, 212, 255, 0.1) 100%);
+        border: 2px solid var(--neon-green);
+        border-radius: 20px;
+        padding: 2rem;
+        margin: 2rem 0;
+        box-shadow: 0 0 30px var(--glow-green);
+        animation: borderPulse 3s ease-in-out infinite;
+    }
+    
+    @keyframes borderPulse {
+        0%, 100% { box-shadow: 0 0 30px var(--glow-green); }
+        50% { box-shadow: 0 0 50px var(--glow-green); }
+    }
+    
+    .hero-title {
+        font-size: 3rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, var(--neon-green) 0%, var(--cyber-blue) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        margin-bottom: 1rem;
+        letter-spacing: 2px;
+    }
+    
+    .hero-subtitle {
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 1.2rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    /* Feature cards */
+    .feature-card {
+        background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+        border: 2px solid transparent;
+        border-radius: 15px;
+        padding: 2rem;
+        margin: 1rem 0;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .feature-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        border-radius: 15px;
+        padding: 2px;
+        background: linear-gradient(135deg, var(--neon-green), var(--cyber-blue));
+        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .feature-card:hover::before {
+        opacity: 1;
+    }
+    
+    .feature-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 40px var(--glow-green);
+    }
+    
+    .feature-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        display: block;
+    }
+    
+    .feature-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--neon-green);
+        margin-bottom: 0.5rem;
+    }
+    
+    .feature-desc {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        line-height: 1.6;
+    }
+    
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0f1629 0%, #1a2341 100%);
+        border-right: 2px solid var(--neon-green);
+    }
+    
+    [data-testid="stSidebar"] .stMarkdown {
+        color: var(--text-primary);
+    }
+    
+    /* Buttons */
+    .stButton > button {
+        background: linear-gradient(135deg, var(--neon-green) 0%, var(--cyber-blue) 100%);
+        color: var(--bg-primary);
+        font-weight: 600;
+        border: none;
+        border-radius: 10px;
+        padding: 0.75rem 2rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px var(--glow-green);
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        font-size: 0.9rem;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px var(--glow-green);
+    }
+    
+    .stButton > button[kind="secondary"] {
+        background: transparent;
+        color: var(--neon-green);
+        border: 2px solid var(--neon-green);
+    }
+    
+    .stButton > button[kind="secondary"]:hover {
+        background: var(--neon-green);
+        color: var(--bg-primary);
+    }
+    
+    /* Input fields */
+    .stTextInput > div > div > input,
+    .stNumberInput > div > div > input,
+    .stSelectbox > div > div > select {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 2px solid rgba(0, 255, 157, 0.3);
+        border-radius: 10px;
+        padding: 0.75rem;
+        font-size: 1rem;
+    }
+    
+    .stTextInput > div > div > input:focus,
+    .stNumberInput > div > div > input:focus,
+    .stSelectbox > div > div > select:focus {
+        border-color: var(--neon-green);
+        box-shadow: 0 0 15px var(--glow-green);
+    }
+    
+    /* Progress bar */
+    .stProgress > div > div > div > div {
+        background: linear-gradient(90deg, var(--neon-green) 0%, var(--cyber-blue) 100%);
+        box-shadow: 0 0 15px var(--glow-green);
+        border-radius: 10px;
+    }
+    
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        background: var(--bg-secondary);
+        border-radius: 15px;
+        padding: 1rem;
+        border: 1px solid rgba(0, 255, 157, 0.2);
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background: transparent;
+        color: var(--text-muted);
+        border-radius: 10px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background: rgba(0, 255, 157, 0.1);
+        color: var(--neon-green);
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, rgba(0, 255, 157, 0.2) 0%, rgba(0, 212, 255, 0.2) 100%);
+        color: var(--neon-green) !important;
+        border: 2px solid var(--neon-green);
+    }
+    
+    /* Status indicators */
+    .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .status-active {
+        background: rgba(0, 255, 157, 0.2);
+        color: var(--neon-green);
+        border: 2px solid var(--neon-green);
+        animation: statusPulse 2s ease-in-out infinite;
+    }
+    
+    .status-idle {
+        background: rgba(139, 149, 176, 0.2);
+        color: var(--text-muted);
+        border: 2px solid var(--text-muted);
+    }
+    
+    @keyframes statusPulse {
+        0%, 100% { box-shadow: 0 0 10px var(--glow-green); }
+        50% { box-shadow: 0 0 20px var(--glow-green); }
+    }
+    
+    /* Results container */
+    .results-container {
+        background: var(--bg-secondary);
+        border: 2px solid var(--neon-green);
+        border-radius: 15px;
+        padding: 2rem;
+        margin: 2rem 0;
+        box-shadow: 0 5px 25px var(--glow-green);
+    }
+    
+    /* Code blocks */
+    .stCodeBlock {
+        background: var(--bg-primary) !important;
+        border: 1px solid rgba(0, 255, 157, 0.3);
+        border-radius: 10px;
+    }
+    
+    code {
+        color: var(--neon-green) !important;
+        background: rgba(0, 255, 157, 0.1) !important;
+        padding: 0.2rem 0.5rem;
+        border-radius: 5px;
+    }
+    
+    /* JSON viewer */
+    .stJson {
+        background: var(--bg-primary);
+        border: 2px solid rgba(0, 255, 157, 0.3);
+        border-radius: 10px;
+        padding: 1rem;
+    }
+    
+    /* Expander */
+    div[data-testid="stExpander"] {
+        background: var(--bg-secondary);
+        border: 1px solid rgba(0, 255, 157, 0.3);
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 255, 157, 0.1);
+    }
+    
+    div[data-testid="stExpander"]:hover {
+        border-color: var(--neon-green);
+        box-shadow: 0 4px 20px rgba(0, 255, 157, 0.2);
+    }
+    
+    /* Download button */
+    .stDownloadButton > button {
+        background: transparent;
+        color: var(--cyber-blue);
+        border: 2px solid var(--cyber-blue);
+        border-radius: 10px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .stDownloadButton > button:hover {
+        background: var(--cyber-blue);
+        color: var(--bg-primary);
+        box-shadow: 0 4px 15px rgba(0, 212, 255, 0.4);
+    }
+    
+    /* Metrics */
+    [data-testid="stMetricValue"] {
+        font-size: 2rem;
+        color: var(--neon-green);
+        font-weight: 700;
+    }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: var(--bg-primary);
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, var(--neon-green) 0%, var(--cyber-blue) 100%);
+        border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, var(--cyber-blue) 0%, var(--neon-green) 100%);
+    }
+    
+    /* Divider */
+    hr {
+        border: none;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, var(--neon-green), transparent);
+        margin: 2rem 0;
+    }
+    
+    /* Section headers */
+    .section-header {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--neon-green);
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        margin: 2rem 0 1rem 0;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid var(--neon-green);
+    }
+    
+    /* Config panel */
+    .config-panel {
+        background: var(--bg-secondary);
+        border: 2px solid rgba(0, 255, 157, 0.3);
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+    }
+    
+    .config-panel:hover {
+        border-color: var(--neon-green);
+        box-shadow: 0 5px 20px rgba(0, 255, 157, 0.2);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Apply CSS right after page config
+apply_custom_css()
+
+# ---------------------------------------------------------------------
+# Session State Initialization - AFTER CSS
+# ---------------------------------------------------------------------
+if "page" not in st.session_state:
+    st.session_state.page = "home"
+if "runner" not in st.session_state:
+    st.session_state.runner = None
+if "payload" not in st.session_state:
+    st.session_state.payload = None
+if "web_payload" not in st.session_state:
+    st.session_state.web_payload = None
+if "logbuf" not in st.session_state:
+    st.session_state.logbuf = ""
+if "last_error" not in st.session_state:
+    st.session_state.last_error = None
+
+# ---------------------------------------------------------------------
 # Utilities: module checks + installer
 # ---------------------------------------------------------------------
 def verify_current_python_has_modules(mod_imports: List[str]) -> Tuple[bool, str]:
-    """Verify THIS Python (sys.executable) can import the given modules."""
     probe = ["import sys"]
     for m in mod_imports:
         probe.append(f"import {m}; print('{m}=' + str(getattr({m}, '__version__', 'installed')))")
@@ -62,7 +472,7 @@ def install_required_packages(pkgs: List[str]) -> str:
         return e.output or str(e)
 
 # ---------------------------------------------------------------------
-# MCP stdio runner (connects to your mvp.py via stdin/stdout)
+# MCP stdio runner
 # ---------------------------------------------------------------------
 class MCPRunner:
     def __init__(self, server_path: str, rpc_timeout: float = 600.0):
@@ -211,7 +621,6 @@ class MCPRunner:
             if isinstance(obj, dict) and obj.get("id") == target_id:
                 return obj
 
-    # -------- MCP high-level --------
     def ensure_initialized(self, progress_cb=None):
         if self.initialized:
             return
@@ -248,40 +657,43 @@ class MCPRunner:
         return resp["result"]
 
 # ---------------------------------------------------------------------
-# Streamlit UI (sidebar unchanged)
+# Check for server file
 # ---------------------------------------------------------------------
-st.set_page_config(page_title="Privacy Checker", page_icon="🔒", layout="wide")
-st.title("🔒 Privacy Checker with MCP")
-st.caption(f"Python: `{sys.executable}`")
-
-# Detect available server file(s)
-available_servers = [f for f in ["mvp.py"] if os.path.exists(f)]
-if not available_servers:
-    st.error("No MCP server files found in this folder. Make sure `mvp.py` is here.")
+if not os.path.exists("mvp.py"):
+    st.error("⚠️ No MCP server file found. Make sure `mvp.py` is in this folder.")
     st.stop()
 
+# ---------------------------------------------------------------------
+# SIDEBAR CONFIGURATION
+# ---------------------------------------------------------------------
 with st.sidebar:
-    server_path = st.selectbox("MCP server file", available_servers, index=0)
-    tool = st.selectbox("Tool", ["check_gmail_privacy", "get_privacy_summary", "check_drive_privacy"], index=0)
-    timeout = st.number_input("Timeout (seconds)", min_value=30, max_value=7200, value=600, step=30)
-    use_ai = st.checkbox("Generate AI explanation (Perplexity Sonar)", value=True)
-
+    st.markdown("### ⚙️ SYSTEM CONFIGURATION")
     st.markdown("---")
-    st.markdown("**Environment check**:")
+    
+    # Server settings
+    server_path = "mvp.py"
+    timeout = st.number_input("⏱️ Timeout (seconds)", min_value=30, max_value=7200, value=600, step=30)
+    use_ai = st.checkbox("🤖 Enable AI Analysis", value=True)
+    
+    st.markdown("---")
+    st.markdown("### 📊 SYSTEM STATUS")
+    
+    # Module check
     ok, msg = verify_current_python_has_modules([
         "mcp",
         "googleapiclient.discovery",
         "google_auth_oauthlib.flow",
     ])
+    
     if ok:
-        st.success("All required modules are importable.")
-        with st.expander("Details", expanded=False):
+        st.markdown('<div class="status-indicator status-active">🟢 MODULES OK</div>', unsafe_allow_html=True)
+        with st.expander("📋 View Details"):
             st.code(msg, language="text")
         can_run = True
     else:
-        st.error("Required packages are missing in this Python.")
+        st.markdown('<div class="status-indicator status-idle">🔴 MODULES MISSING</div>', unsafe_allow_html=True)
         st.code(msg or "Missing modules", language="text")
-        if st.button("📦 Install missing packages now", type="secondary"):
+        if st.button("📦 Install Packages", type="secondary", use_container_width=True):
             out = install_required_packages(REQUIRED_PIP_PKGS)
             st.code(out, language="text")
             ok2, msg2 = verify_current_python_has_modules([
@@ -290,269 +702,625 @@ with st.sidebar:
                 "google_auth_oauthlib.flow",
             ])
             if ok2:
-                st.success("Installed successfully. Click 'Run Scan'.")
+                st.success("✅ Installed successfully!")
+                st.rerun()
             else:
-                st.error("Still missing modules. See output above.")
+                st.error("❌ Installation failed. See output above.")
         can_run = False
-
+    
     st.markdown("---")
-    cols = st.columns(2)
-    with cols[0]:
-        run_btn = st.button("▶️ Run", type="primary", disabled=not can_run)
-    with cols[1]:
-        stop_btn = st.button("⏹ Stop Server")
-
-# Persist state
-if "runner" not in st.session_state:
-    st.session_state.runner = None
-if "payload" not in st.session_state:
-    st.session_state.payload = None
-if "logbuf" not in st.session_state:
-    st.session_state.logbuf = ""
-if "last_error" not in st.session_state:
-    st.session_state.last_error = None
-
-progress_bar = st.progress(0, text="Idle")
-status_text = st.empty()
-with st.expander("Server Logs", expanded=False):
-    live_log = st.empty()
-
-def progress_cb(kind: str, cur: Optional[int], tot: Optional[int], raw_line: str):
-    # Append logs (tail ~200 lines)
-    if raw_line:
-        lines = (st.session_state.logbuf + raw_line + "\n").splitlines()[-200:]
-        st.session_state.logbuf = "\n".join(lines)
-        live_log.code(st.session_state.logbuf, language="text")
-    # Show progress if server logs "Processing message X/Y" or "Processing file X/Y"
-    if kind in ("message", "file") and isinstance(cur, int) and isinstance(tot, int) and tot > 0:
-        pct = int(cur / tot * 100)
-        progress_bar.progress(pct, text=f"{kind.title()} progress: {cur}/{tot} ({pct}%)")
-        status_text.write(f"**{kind.title()}**: {cur}/{tot}")
-
-# Stop server
-if stop_btn and st.session_state.runner:
-    try:
-        st.session_state.runner.stop()
-        st.session_state.runner = None
-        status_text.info("Server stopped.")
-        st.session_state.last_error = None
-    except Exception as e:
-        st.session_state.last_error = f"Stop error: {e}"
-        status_text.error(st.session_state.last_error)
-
-# Run button
-if run_btn:
-    st.session_state.payload = None
-    st.session_state.logbuf = ""
-    st.session_state.last_error = None
-    progress_bar.progress(0, text="Starting…")
-    status_text.write("Launching MCP server…")
-
-    need_new_runner = (not st.session_state.runner) or (st.session_state.runner.server_path != server_path)
-    if need_new_runner and st.session_state.runner:
-        st.session_state.runner.stop()
-        st.session_state.runner = None
-    if not st.session_state.runner:
-        st.session_state.runner = MCPRunner(server_path, rpc_timeout=float(timeout))
-
-    runner: MCPRunner = st.session_state.runner
-
-    try:
-        runner.rpc_timeout = float(timeout)
-        runner.start()
-        status_text.write("Initializing MCP (complete OAuth in your browser if prompted)…")
-        runner.ensure_initialized(progress_cb=progress_cb)
-
-        with st.spinner("Calling tool…"):
-            # IMPORTANT: for your new Gmail metadata flow, set tool to "check_gmail_privacy"
-            result = runner.call_tool(tool, {}, progress_cb=progress_cb)
-
-        # Extract JSON payload from MCP TextContent
-        # Extract JSON payload from MCP TextContent
-        content = result.get("content", [])
-        if content and isinstance(content, list) and content[0].get("type") == "text":
-            txt = content[0].get("text", "")
+    
+    # Server status
+    if st.session_state.runner and st.session_state.runner.initialized:
+        st.markdown('<div class="status-indicator status-active">🟢 SERVER ACTIVE</div>', unsafe_allow_html=True)
+        if st.button("⏹ Stop Server", type="secondary", use_container_width=True):
             try:
-                payload = json.loads(txt)
-            except Exception:
-                payload = txt
-        else:
-            payload = result
-
-        # Normalize to a single struct we will send to AI:
-        # metadata_for_ai = {"gmail": <obj or None>, "drive": <obj or None>}
-        if tool == "get_privacy_summary" and isinstance(payload, dict):
-            metadata_for_ai = {
-                "gmail": payload.get("gmail_raw"),
-                "drive": payload.get("drive_raw"),
-            }
-        elif tool == "check_gmail_privacy":
-            metadata_for_ai = {"gmail": payload, "drive": None}
-        elif tool == "check_drive_privacy":
-            metadata_for_ai = {"gmail": None, "drive": payload}
-        else:
-            # fallback: treat entire payload as one blob
-            metadata_for_ai = {"gmail": payload, "drive": None}
-
-        st.session_state.payload = metadata_for_ai
-        progress_bar.progress(100, text="Done")
-        status_text.success("Completed ✅")
-
-
-    except TimeoutError as e:
-        st.session_state.last_error = f"Timeout: {e}"
-        status_text.error(st.session_state.last_error)
-        progress_bar.progress(0, text="Timed out")
-    except Exception as e:
-        st.session_state.last_error = f"Error: {e}"
-        status_text.error(st.session_state.last_error)
-        progress_bar.progress(0, text="Error")
+                st.session_state.runner.stop()
+                st.session_state.runner = None
+                st.success("Server stopped.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Stop error: {e}")
+    else:
+        st.markdown('<div class="status-indicator status-idle">⚪ SERVER IDLE</div>', unsafe_allow_html=True)
+    
+    st.markdown("---")
+    st.markdown("### 🏠 NAVIGATION")
+    
+    if st.button("🏠 Home", use_container_width=True, type="primary" if st.session_state.page == "home" else "secondary"):
+        st.session_state.page = "home"
+        st.rerun()
 
 # ---------------------------------------------------------------------
-# RESULTS — Only two tabs: (1) Metadata, (2) AI Analysis
+# HOME PAGE
 # ---------------------------------------------------------------------
-payload = st.session_state.payload
-if payload is not None:
-    tabs = st.tabs(["Metadata sent to AI", "AI Analysis"])
+def show_home_page():
+    # Hero section
+    st.markdown("""
+    <div class="hero-container">
+        <div class="hero-title">🔒 PRIVACY COMPLIANCE AGENT</div>
+        <div class="hero-subtitle">Advanced AI-Powered Privacy & Security Auditing Platform</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Feature cards
+    col1, col2 = st.columns(2, gap="large")
+    
+    with col1:
+        st.markdown("""
+        <div class="feature-card" id="gmail-card">
+            <span class="feature-icon">📧</span>
+            <div class="feature-title">Gmail & Drive Audit</div>
+            <div class="feature-desc">
+                Comprehensive privacy scanning of your Gmail messages and Google Drive files. 
+                Detect PII exposure, risky permissions, and compliance violations across your Google workspace.
+                <br><br>
+                <strong>Features:</strong>
+                <ul>
+                    <li>Email metadata analysis</li>
+                    <li>File permission auditing</li>
+                    <li>PII detection & classification</li>
+                    <li>AI-powered risk assessment</li>
+                </ul>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🚀 Start Gmail/Drive Audit", use_container_width=True, type="primary"):
+            st.session_state.page = "gmail"
+            st.rerun()
+    
+    with col2:
+        st.markdown("""
+        <div class="feature-card" id="website-card">
+            <span class="feature-icon">🌐</span>
+            <div class="feature-title">Website Privacy Audit</div>
+            <div class="feature-desc">
+                Deep-dive security and privacy analysis of any website. Check for GDPR compliance, 
+                cookie consent violations, tracker exposure, and form security issues.
+                <br><br>
+                <strong>Features:</strong>
+                <ul>
+                    <li>Cookie & tracker detection</li>
+                    <li>Form PII analysis</li>
+                    <li>Security header validation</li>
+                    <li>GDPR compliance checking</li>
+                </ul>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🚀 Start Website Audit", use_container_width=True, type="primary"):
+            st.session_state.page = "website"
+            st.rerun()
+    
+    # Stats section
+    st.markdown("---")
+    st.markdown('<div class="section-header">📊 PLATFORM CAPABILITIES</div>', unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Scan Types", "2+", delta="Growing")
+    with col2:
+        st.metric("AI Models", "Perplexity Sonar", delta="Latest")
+    with col3:
+        st.metric("Security Checks", "20+", delta="Comprehensive")
+    with col4:
+        st.metric("Response Time", "< 2 min", delta="Fast")
+    
+    # Info section
+    st.markdown("---")
+    st.markdown('<div class="section-header">ℹ️ HOW IT WORKS</div>', unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        <div class="config-panel">
+            <h3 style="color: var(--neon-green);">1️⃣ SELECT</h3>
+            <p>Choose your audit type: Gmail/Drive or Website analysis. Configure scan parameters and authentication.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="config-panel">
+            <h3 style="color: var(--cyber-blue);">2️⃣ SCAN</h3>
+            <p>Our MCP server performs deep analysis, collecting metadata, security headers, and privacy indicators.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="config-panel">
+            <h3 style="color: var(--neon-green);">3️⃣ ANALYZE</h3>
+            <p>AI-powered analysis generates actionable insights, risk scores, and compliance recommendations.</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # ---- Tab 1: show EXACT JSON going into the model ----
-    with tabs[0]:
-        st.subheader("Metadata")
-        st.caption("Below is the exact JSON that will be sent to the AI model.")
-        st.json(payload)
-        st.download_button(
-            label="Download metadata JSON",
-            data=json.dumps(payload, indent=2),
-            file_name="metadata.json",
-            mime="application/json",
+# ---------------------------------------------------------------------
+# GMAIL/DRIVE PAGE
+# ---------------------------------------------------------------------
+def show_gmail_page():
+    # Back button
+    if st.button("← Back to Home", type="secondary"):
+        st.session_state.page = "home"
+        st.rerun()
+    
+    st.markdown("---")
+    st.markdown('<div class="section-header">📧 GMAIL & DRIVE PRIVACY AUDIT</div>', unsafe_allow_html=True)
+    
+    # Configuration panel
+    st.markdown('<div class="config-panel">', unsafe_allow_html=True)
+    st.markdown("### 🎯 AUDIT CONFIGURATION")
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        tool = st.selectbox(
+            "Select Audit Tool",
+            ["check_gmail_privacy", "get_privacy_summary", "check_drive_privacy"],
+            index=0,
+            help="Choose which Google service to audit"
         )
-
-    # ---- Tab 2: AI Analysis ----
-    with tabs[1]:
-        st.subheader("AI Analysis")
-        if not use_ai:
-            st.info("AI analysis disabled in the sidebar.")
-        elif not OpenAI:
-            st.warning("The 'openai' package is not installed in this environment.")
+    with col2:
+        if st.session_state.runner and st.session_state.runner.initialized:
+            st.markdown('<div class="status-indicator status-active">🟢 READY</div>', unsafe_allow_html=True)
         else:
-            pplx_key = os.getenv("PPLX_API_KEY") or st.secrets.get("PPLX_API_KEY")
-            if not pplx_key:
-                st.warning("Perplexity API key not found. Set PPLX_API_KEY in your env or Streamlit secrets.")
-            else:
+            st.markdown('<div class="status-indicator status-idle">⚪ IDLE</div>', unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Tool descriptions
+    tool_info = {
+        "check_gmail_privacy": "Scans Gmail for PII exposure, risky headers, and suspicious senders",
+        "get_privacy_summary": "Comprehensive audit of both Gmail and Google Drive",
+        "check_drive_privacy": "Analyzes Drive files for permission issues and public sharing"
+    }
+    st.info(f"ℹ️ {tool_info.get(tool, '')}")
+    
+    # Run button
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        run_btn = st.button("▶️ START AUDIT", use_container_width=True, type="primary", disabled=not can_run)
+    
+    # Progress section
+    st.markdown("---")
+    progress_bar = st.progress(0, text="⏸️ Idle")
+    status_text = st.empty()
+    
+    with st.expander("📊 Live Server Logs", expanded=False):
+        live_log = st.empty()
+    
+    def progress_cb(kind: str, cur: Optional[int], tot: Optional[int], raw_line: str):
+        if raw_line:
+            lines = (st.session_state.logbuf + raw_line + "\n").splitlines()[-200:]
+            st.session_state.logbuf = "\n".join(lines)
+            live_log.code(st.session_state.logbuf, language="text")
+        if kind in ("message", "file") and isinstance(cur, int) and isinstance(tot, int) and tot > 0:
+            pct = int(cur / tot * 100)
+            progress_bar.progress(pct, text=f"⚡ {kind.title()}: {cur}/{tot} ({pct}%)")
+            status_text.markdown(f"**Processing**: `{cur}/{tot}` {kind}s")
+    
+    # Execute audit
+    if run_btn:
+        st.session_state.payload = None
+        st.session_state.logbuf = ""
+        st.session_state.last_error = None
+        progress_bar.progress(0, text="🚀 Initializing...")
+        status_text.write("🔄 Starting MCP server...")
+        
+        need_new_runner = (not st.session_state.runner) or (st.session_state.runner.server_path != server_path)
+        if need_new_runner and st.session_state.runner:
+            st.session_state.runner.stop()
+            st.session_state.runner = None
+        if not st.session_state.runner:
+            st.session_state.runner = MCPRunner(server_path, rpc_timeout=float(timeout))
+        
+        runner: MCPRunner = st.session_state.runner
+        
+        try:
+            runner.rpc_timeout = float(timeout)
+            runner.start()
+            status_text.write("🔐 Authenticating (check browser for OAuth)...")
+            runner.ensure_initialized(progress_cb=progress_cb)
+            
+            with st.spinner("⚙️ Running audit..."):
+                result = runner.call_tool(tool, {}, progress_cb=progress_cb)
+            
+            # Parse result
+            content = result.get("content", [])
+            if content and isinstance(content, list) and content[0].get("type") == "text":
+                txt = content[0].get("text", "")
                 try:
-                    client = OpenAI(api_key=pplx_key, base_url="https://api.perplexity.ai")
-                    model_name = "sonar"  # or "sonar-pro" if you have access
-
-                    # payload is always: {"gmail": <obj or None>, "drive": <obj or None>}
-                    gmail_meta = payload.get("gmail")
-                    drive_meta = payload.get("drive")
-
-                    # Helper to call AI
-                    def ai_analyze(title: str, data_obj: Any, instructions: str) -> str:
-                        data_txt = json.dumps(data_obj, indent=2)
-                        resp = client.chat.completions.create(
-                            model=model_name,
-                            messages=[
-                                {"role": "system", "content": instructions},
-                                {"role": "user", "content": data_txt},
-                            ],
-                            max_tokens=900,
-                            temperature=0.3,
-                        )
-                        return resp.choices[0].message.content
-
-                    # CASES:
-                    # 1) get_privacy_summary -> do (gmail AI) + (drive AI) -> overall AI
-                    # 2) check_gmail_privacy -> only gmail AI
-                    # 3) check_drive_privacy -> only drive AI
-
-                    if tool == "get_privacy_summary":
-                        st.write("### Step 1: Gmail Analysis")
-                        gmail_summary = ""
-                        if gmail_meta is not None:
-                            with st.spinner("Analyzing Gmail metadata…"):
-                                gmail_summary = ai_analyze(
-                                    "Gmail",
-                                    gmail_meta,
-                                    (
-                                        "You are a privacy compliance assistant. Analyze this Gmail metadata and flag "
-                                        "potential privacy risks (PII exposure, sensitive terms, risky senders, etc.). "
-                                        "Provide short, prioritized, actionable steps. If evidence is weak, say so."
-                                    ),
-                                )
-                            st.success(gmail_summary)
-                        else:
-                            st.info("No Gmail metadata provided.")
-
-                        st.write("### Step 2: Drive Analysis")
-                        drive_summary = ""
-                        if drive_meta is not None:
-                            with st.spinner("Analyzing Drive metadata…"):
-                                drive_summary = ai_analyze(
-                                    "Drive",
-                                    drive_meta,
-                                    (
-                                        "You are a privacy compliance assistant. Analyze this Google Drive metadata "
-                                        "(filenames, permissions, link-sharing, etc.) and flag privacy risks "
-                                        "(public links, oversharing, sensitive filenames). Provide prioritized steps."
-                                    ),
-                                )
-                            st.success(drive_summary)
-                        else:
-                            st.info("No Drive metadata provided.")
-
-                        st.write("### Step 3: Overall Summary")
-                        combined_prompt = {
-                            "gmail_analysis": gmail_summary,
-                            "drive_analysis": drive_summary,
-                        }
-                        with st.spinner("Generating overall summary…"):
-                            overall = ai_analyze(
-                                "Overall",
-                                combined_prompt,
-                                (
-                                    "You are a privacy lead. Read the Gmail and Drive analyses. Produce a concise "
-                                    "overall risk summary with (1) top 3 risks (2) severity score (low/med/high), "
-                                    "(3) immediate actions (next 24–48h), (4) follow-ups, and (5) any known unknowns."
-                                ),
+                    payload = json.loads(txt)
+                except Exception:
+                    payload = txt
+            else:
+                payload = result
+            
+            # Normalize for AI
+            if tool == "get_privacy_summary" and isinstance(payload, dict):
+                metadata_for_ai = {
+                    "gmail": payload.get("gmail_raw"),
+                    "drive": payload.get("drive_raw"),
+                }
+            elif tool == "check_gmail_privacy":
+                metadata_for_ai = {"gmail": payload, "drive": None}
+            elif tool == "check_drive_privacy":
+                metadata_for_ai = {"gmail": None, "drive": payload}
+            else:
+                metadata_for_ai = {"gmail": payload, "drive": None}
+            
+            st.session_state.payload = metadata_for_ai
+            progress_bar.progress(100, text="✅ Complete")
+            status_text.success("✅ Audit completed successfully!")
+            st.balloons()
+            
+        except TimeoutError as e:
+            st.session_state.last_error = f"Timeout: {e}"
+            status_text.error(st.session_state.last_error)
+            progress_bar.progress(0, text="⏱️ Timed out")
+        except Exception as e:
+            st.session_state.last_error = f"Error: {e}"
+            status_text.error(st.session_state.last_error)
+            progress_bar.progress(0, text="❌ Error")
+    
+    # Display results
+    payload = st.session_state.payload
+    if payload is not None:
+        st.markdown("---")
+        st.markdown('<div class="results-container">', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">📊 AUDIT RESULTS</div>', unsafe_allow_html=True)
+        
+        tabs = st.tabs(["📄 Raw Metadata", "🤖 AI Analysis", "💾 Export"])
+        
+        with tabs[0]:
+            st.markdown("#### 📄 METADATA PAYLOAD")
+            st.caption("Raw JSON data collected during the audit")
+            st.json(payload)
+        
+        with tabs[1]:
+            st.markdown("#### 🤖 AI-POWERED ANALYSIS")
+            
+            if not use_ai:
+                st.info("ℹ️ AI analysis is disabled. Enable it in the sidebar.")
+            elif not OpenAI:
+                st.warning("⚠️ OpenAI package not installed")
+            else:
+                pplx_key = PPLX_API_KEY
+                if not pplx_key:
+                    st.warning("🔑 Perplexity API key not found")
+                else:
+                    try:
+                        client = OpenAI(api_key=pplx_key, base_url="https://api.perplexity.ai")
+                        model_name = "sonar"
+                        
+                        gmail_meta = payload.get("gmail")
+                        drive_meta = payload.get("drive")
+                        
+                        def ai_analyze(title: str, data_obj: Any, instructions: str) -> str:
+                            data_txt = json.dumps(data_obj, indent=2)
+                            resp = client.chat.completions.create(
+                                model=model_name,
+                                messages=[
+                                    {"role": "system", "content": instructions},
+                                    {"role": "user", "content": data_txt},
+                                ],
+                                max_tokens=900,
+                                temperature=0.3,
                             )
-                        st.success(overall)
-
-                    elif tool == "check_gmail_privacy":
-                        st.write("### Gmail Analysis")
-                        if gmail_meta is not None:
-                            with st.spinner("Analyzing Gmail metadata…"):
+                            return resp.choices[0].message.content
+                        
+                        if gmail_meta is None and drive_meta is None:
+                            st.info("ℹ️ No data to analyze")
+                        elif gmail_meta and drive_meta:
+                            with st.spinner("🔍 Analyzing Gmail..."):
                                 gmail_summary = ai_analyze(
                                     "Gmail",
                                     gmail_meta,
-                                    (
-                                        "You are a privacy compliance assistant. Analyze this Gmail metadata and flag "
-                                        "privacy risks. Provide prioritized, actionable steps."
-                                    ),
+                                    "You are a privacy compliance assistant. Analyze this Gmail metadata and flag potential privacy risks (PII exposure, risky headers, senders, patterns). Provide prioritized, actionable steps.",
                                 )
+                            st.markdown("##### 📧 Gmail Analysis")
                             st.success(gmail_summary)
-                        else:
-                            st.info("No Gmail metadata provided.")
-
-                    elif tool == "check_drive_privacy":
-                        st.write("### Drive Analysis")
-                        if drive_meta is not None:
-                            with st.spinner("Analyzing Drive metadata…"):
+                            
+                            with st.spinner("🔍 Analyzing Drive..."):
                                 drive_summary = ai_analyze(
                                     "Drive",
                                     drive_meta,
-                                    (
-                                        "You are a privacy compliance assistant. Analyze this Drive metadata and flag "
-                                        "privacy risks. Provide prioritized, actionable steps."
-                                    ),
+                                    "You are a privacy compliance assistant. Analyze this Drive metadata (filenames, permissions, link-sharing) and flag privacy risks (public links, oversharing, sensitive filenames). Provide prioritized steps.",
                                 )
+                            st.markdown("##### 📁 Drive Analysis")
                             st.success(drive_summary)
-                        else:
-                            st.info("No Drive metadata provided.")
+                            
+                            with st.spinner("🔍 Generating summary..."):
+                                combined_prompt = {"gmail_analysis": gmail_summary, "drive_analysis": drive_summary}
+                                overall = ai_analyze(
+                                    "Overall",
+                                    combined_prompt,
+                                    "You are a privacy lead. Read the Gmail and Drive analyses. Produce a concise overall risk summary with (1) top 3 risks (2) severity (low/med/high) (3) immediate actions (24–48h) (4) follow-ups, (5) known unknowns.",
+                                )
+                            st.markdown("##### 📊 Overall Summary")
+                            st.success(overall)
+                        
+                        elif gmail_meta:
+                            with st.spinner("🔍 Analyzing..."):
+                                out = ai_analyze(
+                                    "Gmail",
+                                    gmail_meta,
+                                    "You are a privacy compliance assistant. Analyze this Gmail metadata and flag privacy risks. Provide prioritized, actionable steps.",
+                                )
+                            st.success(out)
+                        
+                        elif drive_meta:
+                            with st.spinner("🔍 Analyzing..."):
+                                out = ai_analyze(
+                                    "Drive",
+                                    drive_meta,
+                                    "You are a privacy compliance assistant. Analyze this Drive metadata and flag privacy risks. Provide prioritized, actionable steps.",
+                                )
+                            st.success(out)
+                    
+                    except Exception as e:
+                        st.error(f"❌ API Error: {e}")
+        
+        with tabs[2]:
+            st.markdown("#### 💾 EXPORT OPTIONS")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    label="📥 Download JSON",
+                    data=json.dumps(payload, indent=2),
+                    file_name="gmail_drive_audit.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+            with col2:
+                st.download_button(
+                    label="📥 Download Report",
+                    data=json.dumps(payload, indent=2),
+                    file_name="audit_report.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
-                    else:
-                        st.info("Unknown tool selection.")
+# ---------------------------------------------------------------------
+# WEBSITE AUDIT PAGE
+# ---------------------------------------------------------------------
+def show_website_page():
+    # Back button
+    if st.button("← Back to Home", type="secondary"):
+        st.session_state.page = "home"
+        st.rerun()
+    
+    st.markdown("---")
+    st.markdown('<div class="section-header">🌐 WEBSITE PRIVACY AUDIT</div>', unsafe_allow_html=True)
+    
+    # Configuration panel
+    st.markdown('<div class="config-panel">', unsafe_allow_html=True)
+    st.markdown("### 🎯 TARGET CONFIGURATION")
+    
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        if st.session_state.runner and st.session_state.runner.initialized:
+            st.markdown('<div class="status-indicator status-active">🟢 READY</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="status-indicator status-idle">⚪ IDLE</div>', unsafe_allow_html=True)
+    
+    url = st.text_input(
+        "🔗 Target URL",
+        value="https://example.com",
+        placeholder="Enter website URL to audit...",
+        help="Full URL including https://"
+    )
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        mode = st.selectbox(
+            "🔍 Scan Mode",
+            ["generic", "login", "signup"],
+            index=0,
+            help="Type of page to analyze"
+        )
+    with col2:
+        max_wait_ms = st.number_input(
+            "⏳ Wait Time (ms)",
+            min_value=3000,
+            max_value=60000,
+            value=15000,
+            step=1000,
+            help="Time to wait for dynamic content"
+        )
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Scan mode descriptions
+    mode_info = {
+        "generic": "General website scan for cookies, trackers, and privacy policies",
+        "login": "Focused analysis on login forms and authentication security",
+        "signup": "Registration form analysis for PII collection and data minimization"
+    }
+    st.info(f"ℹ️ {mode_info.get(mode, '')}")
+    
+    # Run button
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        run_btn = st.button("▶️ START SCAN", use_container_width=True, type="primary", disabled=not can_run)
+    
+    # Progress section
+    st.markdown("---")
+    progress_bar = st.progress(0, text="⏸️ Idle")
+    status_text = st.empty()
+    
+    with st.expander("📊 Live Server Logs", expanded=False):
+        live_log = st.empty()
+    
+    def progress_cb(kind: str, cur: Optional[int], tot: Optional[int], raw_line: str):
+        if raw_line:
+            lines = (st.session_state.logbuf + raw_line + "\n").splitlines()[-200:]
+            st.session_state.logbuf = "\n".join(lines)
+            live_log.code(st.session_state.logbuf, language="text")
+        if kind in ("message", "file") and isinstance(cur, int) and isinstance(tot, int) and tot > 0:
+            pct = int(cur / tot * 100)
+            progress_bar.progress(pct, text=f"⚡ {kind.title()}: {cur}/{tot} ({pct}%)")
+            status_text.markdown(f"**Processing**: `{cur}/{tot}` {kind}s")
+    
+    # Execute scan
+    if run_btn:
+        st.session_state.web_payload = None
+        st.session_state.logbuf = ""
+        st.session_state.last_error = None
+        progress_bar.progress(0, text="🚀 Initializing...")
+        status_text.write("🔄 Starting MCP server...")
+        
+        need_new_runner = (not st.session_state.runner) or (st.session_state.runner.server_path != server_path)
+        if need_new_runner and st.session_state.runner:
+            st.session_state.runner.stop()
+            st.session_state.runner = None
+        if not st.session_state.runner:
+            st.session_state.runner = MCPRunner(server_path, rpc_timeout=float(timeout))
+        
+        runner: MCPRunner = st.session_state.runner
+        
+        try:
+            runner.rpc_timeout = float(timeout)
+            runner.start()
+            status_text.write("🔐 Initializing scan...")
+            runner.ensure_initialized(progress_cb=progress_cb)
+            
+            args = {"url": url, "mode": mode, "max_wait_ms": int(max_wait_ms)}
+            with st.spinner("🔍 Scanning website..."):
+                result = runner.call_tool("check_website_privacy", args, progress_cb=progress_cb)
+            
+            # Parse result
+            content = result.get("content", [])
+            if content and isinstance(content, list) and content[0].get("type") == "text":
+                txt = content[0].get("text", "")
+                try:
+                    web_payload = json.loads(txt)
+                except Exception:
+                    web_payload = txt
+            else:
+                web_payload = result
+            
+            st.session_state.web_payload = web_payload
+            progress_bar.progress(100, text="✅ Complete")
+            status_text.success("✅ Website audit completed!")
+            st.balloons()
+            
+        except TimeoutError as e:
+            st.session_state.last_error = f"Timeout: {e}"
+            status_text.error(st.session_state.last_error)
+            progress_bar.progress(0, text="⏱️ Timed out")
+        except Exception as e:
+            st.session_state.last_error = f"Error: {e}"
+            status_text.error(st.session_state.last_error)
+            progress_bar.progress(0, text="❌ Error")
+    
+    # Display results
+    web_payload = st.session_state.web_payload
+    if web_payload is not None:
+        st.markdown("---")
+        st.markdown('<div class="results-container">', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">📊 SCAN RESULTS</div>', unsafe_allow_html=True)
+        
+        tabs = st.tabs(["📄 Raw Data", "🤖 AI Analysis", "💾 Export"])
+        
+        with tabs[0]:
+            st.markdown("#### 📄 WEBSITE AUDIT DATA")
+            st.caption("Complete scan data from target website")
+            st.json(web_payload)
+        
+        with tabs[1]:
+            st.markdown("#### 🤖 AI-POWERED ANALYSIS")
+            
+            if not use_ai:
+                st.info("ℹ️ AI analysis is disabled. Enable it in the sidebar.")
+            elif not OpenAI:
+                st.warning("⚠️ OpenAI package not installed")
+            else:
+                pplx_key = PPLX_API_KEY
+                if not pplx_key:
+                    st.warning("🔑 Perplexity API key not found")
+                else:
+                    try:
+                        client = OpenAI(api_key=pplx_key, base_url="https://api.perplexity.ai")
+                        model_name = "sonar"
+                        
+                        system_prompt = (
+                            "You are a privacy/compliance auditor. You have to simplify the content so that everyone understands it even people who aren't well versed with security and privacy schemes,"
+                            "Read the website audit JSON (dynamic or static) "
+                            "and produce a clear summary with:\n"
+                            "1) Consent & Cookies — were third-party/ads cookies set pre-consent? Summarize consent_analysis.verdict and key diffs.\n"
+                            "2) Trackers/Third Parties — list notable thirdParty domains.\n"
+                            "3) Forms & PII — summarize forms, PII types requested, and minimization concerns by mode (login/signup).\n"
+                            "4) Security Headers — note HSTS/CSP/XFO presence and obvious misconfigurations.\n"
+                            "5) Policies — whether canonical privacy/terms were fetched; highlight missing rights/retention/transfer mentions.\n"
+                            "6) Final Verdict — severity (low/medium/high) with prioritized actions.\n"
+                            "Be concise, factual, and action-oriented. If evidence is weak or inconclusive, say so."
+                        )
+                        
+                        data_txt = json.dumps(web_payload, indent=2)
+                        with st.spinner("🔍 Analyzing scan data..."):
+                            resp = client.chat.completions.create(
+                                model=model_name,
+                                messages=[
+                                    {"role": "system", "content": system_prompt},
+                                    {"role": "user", "content": data_txt},
+                                ],
+                                max_tokens=1000,
+                                temperature=0.3,
+                            )
+                        st.success(resp.choices[0].message.content)
+                    
+                    except Exception as e:
+                        st.error(f"❌ API Error: {e}")
+        
+        with tabs[2]:
+            st.markdown("#### 💾 EXPORT OPTIONS")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    label="📥 Download JSON",
+                    data=json.dumps(web_payload, indent=2),
+                    file_name="website_audit.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+            with col2:
+                st.download_button(
+                    label="📥 Download Report",
+                    data=json.dumps(web_payload, indent=2),
+                    file_name="website_report.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
-                except Exception as e:
-                    st.error(f"Perplexity API error: {e}")
+# ---------------------------------------------------------------------
+# PAGE ROUTER
+# ---------------------------------------------------------------------
+if st.session_state.page == "home":
+    show_home_page()
+elif st.session_state.page == "gmail":
+    show_gmail_page()
+elif st.session_state.page == "website":
+    show_website_page()
 
+# Footer
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; color: var(--text-muted); padding: 2rem 0;">
+    <p style="font-size: 0.9rem; margin-bottom: 0.5rem;">
+        🔒 <strong>Privacy Compliance Agent</strong> | Powered by MCP & Perplexity AI
+    </p>
+    <p style="font-size: 0.8rem; color: var(--text-muted);">
+        Built for security, designed for compliance
+    </p>
+</div>
+""", unsafe_allow_html=True)
