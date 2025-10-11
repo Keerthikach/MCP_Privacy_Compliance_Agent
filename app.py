@@ -255,7 +255,7 @@ st.title("🔒 Privacy Checker with MCP")
 st.caption(f"Python: `{sys.executable}`")
 
 # Detect available server file(s)
-available_servers = [f for f in ["mvp.py", "debug_mvp.py"] if os.path.exists(f)]
+available_servers = [f for f in ["mvp.py"] if os.path.exists(f)]
 if not available_servers:
     st.error("No MCP server files found in this folder. Make sure `mvp.py` is here.")
     st.stop()
