@@ -14,7 +14,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })
       .catch((err) => {
         console.error("Bridge request failed", err);
-        alert("⚠️ Privacy Checker: Failed to contact server.");
+        alert("⚠ Privacy Checker: Failed to contact server.");
       });
   }
 });
