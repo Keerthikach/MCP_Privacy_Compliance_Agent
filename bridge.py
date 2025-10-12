@@ -7,8 +7,20 @@ import json
 import os
 import time
 
+try:
+    import streamlit as st
+    secrets = st.secrets
+except ImportError:
+    secrets = {}
+
 app = Flask(__name__)
 CORS(app)
+
+QUEUE_PATH = (
+    os.getenv("QUEUE_FILE")
+    or secrets.get("QUEUE_FILE")
+    or os.path.join(os.getcwd(), "bridge_queue.jsonl")
+)
 
 # Queue file path - can be overridden by environment variable
 QUEUE_PATH = os.getenv("QUEUE_FILE") or os.path.join(os.getcwd(), "bridge_queue.jsonl")

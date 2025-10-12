@@ -13,9 +13,18 @@ from typing import Any, Dict, Optional, Tuple, List
 
 import streamlit as st
 from dotenv import load_dotenv
+try:
+    import streamlit as st
+    secrets = st.secrets
+except ImportError:
+    secrets = {}
 
 
-QUEUE_FILE = os.path.abspath(os.path.join(os.getcwd(), "bridge_queue.jsonl"))
+QUEUE_PATH = (
+    os.getenv("QUEUE_FILE")
+    or secrets.get("QUEUE_FILE")
+    or os.path.join(os.getcwd(), "bridge_queue.jsonl")
+)
 
 # Optional OpenAI-compatible client (Perplexity works via base_url)
 try:
