@@ -1,202 +1,243 @@
-"🔒 Privacy Compliance Agent (MCP + Streamlit + Perplexity AI)"
-A local-first privacy checker that inspects "Gmail" and "Google Drive" accounts, then generates actionable AI summaries in a clean "Streamlit" UI.
-The platform is designed for robust privacy & security auditing using a modular agent-based architecture and AI-powered summarization.
+# 🔒 Privacy Checker — MCP Privacy Compliance Agent  
 
-"🌟 Key Features"
-"🔐 Local-first": runs entirely on the user's machine; Google APIs are accessed with strictly read-only scopes.
+### *One unified solution for AI-powered privacy compliance.*
 
-"🔌 MCP-based": follows standard tools/list & tools/call agent contracts, minimizing wiring complexity.
+---
 
-"📧 Gmail": securely retrieves raw message metadata (subjects, headers, snippets).
+## 🧩 Overview  
 
-"📂 Google Drive": obtains file and permission details (link sharing, oversharing, public access).
+*Privacy Checker* is an *AI-powered, **local-first* privacy auditing tool that scans *websites, **Gmail, and **Google Drive* for privacy exposures.  
+It detects *cookies, trackers, and overshared files, and uses **AI to generate risk summaries and actionable compliance steps* — all inside a *Streamlit dashboard*.
 
-"🧠 AI summaries": leverages Perplexity Sonar via an OpenAI-compatible API to transform raw metadata into clear, prioritized risk actions.
+Unlike typical compliance tools that upload your data to the cloud, this project runs *entirely on your local machine* using the *Model Context Protocol (MCP)* — ensuring your data and tokens stay secure.
 
-"📊 Streamlit UI": offers an interactive dashboard with two main tabs:
+---
 
-"Metadata": view the raw JSON data sent to AI.
+## ⚙ Key Features – Core Capabilities  
 
-"AI Analysis": per-source and overall privacy assessments.
+| Feature | Description |
+|----------|-------------|
+| 🌐 *Website Privacy Audit* | Detects cookies, trackers, and third-party scripts (via Chrome extension). |
+| 📧 *Gmail Analyzer* | Scans recent emails for sensitive metadata, risky senders, or headers. |
+| 📂 *Drive Analyzer* | Flags overshared/public files and permission risks. |
+| 🧠 *AI Summary Generator* | Converts raw metadata into natural-language risk summaries. |
+| 📊 *Streamlit Dashboard* | Displays results in real-time, showing risk scores and detailed summaries. |
 
-"🪵 Live Progress": UI reads server stderr logs to update users in real time.
+---
 
-"🛠️ Architecture & Workflow"
-"Gmail/Drive" (OAuth2, read-only scopes)
+## 🏗 Architecture & Flow  
 
-Securely authenticates and fetches metadata only (no content or modification).
+*Core components:*
 
-"MCP Server" (mvp.py)
+1. **🧠 MCP Server (mvp.py)**  
+   Implements tools/list and tools/call contracts.  
+   Handles Gmail & Drive scans via OAuth and returns structured JSON metadata.
 
-Exposes agents via tools/list and tools/call
+2. *🌐 Chrome Extension*  
+   Detects login pages and gathers privacy metadata (cookies, scripts, trackers).  
+   Sends the collected data to the local bridge server for AI analysis.  
 
-check_gmail_privacy → returns raw Gmail metadata
+3. **🪄 Flask Bridge (bridge.py)**  
+   Acts as a local API endpoint between the browser and the MCP server.  
+   Receives privacy data from the Chrome extension → sends to MCP tools.
 
-check_drive_privacy → returns Drive files/permissions
+4. **📺 Streamlit Frontend (app.py)**  
+   Lets you start scans, track progress (e.g., “Scanning 31/50 files…”),  
+   view raw metadata, and generate AI summaries from results.
 
-get_privacy_summary → combines Gmail and Drive raw outputs
+5. *🧩 AI Layer (Perplexity Sonar / OpenAI Compatible)*  
+   Consumes structured metadata and produces readable, prioritized recommendations.
 
-Static analysis only; no AI or third-party summary generated server-side.
+---
 
-"Streamlit UI" (app.py)
+## 🔁 Detailed Flow  
 
-Connects to MCP via stdio, parses server logs for progress.
+1. *Chrome Extension* detects a login or sensitive form → gathers page data → posts to the Flask bridge.  
+2. *Bridge Server* forwards the request to the *MCP Server* for deeper scanning or local AI analysis.  
+3. *MCP Server* authenticates (OAuth2) and runs:  
+   - check_gmail_privacy() → Gmail metadata.  
+   - check_drive_privacy() → Drive files + permission data.  
+   - get_privacy_summary() → aggregated summary.  
+4. *AI Model* (Perplexity Sonar / OpenAI API) converts raw JSON → human-readable summary & recommendations.  
+5. *Streamlit Dashboard* displays live progress, logs, and final reports.
 
-Provides two tabs: Metadata and AI Analysis.
+---
 
-Perplexity Sonar (via OpenAI-compatible client) delivers AI summaries for Gmail, Drive, and an overall privacy report.
+## 🧠 How MCP Solves the m×n Problem  
 
-Architecture Diagram (ASCII):
+Normally, every *agent* must integrate with every *tool* individually (m×n connections).  
+With MCP, both sides just follow one standard interface:
 
-text
-Gmail/Drive OAuth2 → MCP Server (mvp.py) → Streamlit UI (app.py)
-     ⭣                    ⭣                       ⭣
-Perplexity Sonar (OpenAI-compatible AI) ←——— Metadata, Actions
-"⚙️ Tech Stack"
-"Server": Python (3.10+), MCP (mcp), Google APIs (google-api-python-client, google-auth-oauthlib)
+tools/list → discover available tools
+tools/call → execute any tool
 
-"Frontend": Streamlit
 
-"AI": Perplexity Sonar API (acts as an OpenAI-compatible endpoint)
+You wire m + n instead of m × n.  
+This ensures cleaner integrations, unified security, and simple reuse.
 
-"UI Client": OpenAI Python client (openai python package, with base_url=https://api.perplexity.ai)
+---
 
-"🚀 Getting Started"
-"1) Clone the Repo"
-text
+## 🚀 Getting Started  
+
+### 1️⃣ Clone the Repository  
+```bash
 git clone https://github.com/Keerthikach/MCP_Privacy_Compliance_Agent.git
 cd MCP_Privacy_Compliance_Agent
-"2) (Optional) Create and Activate Python Virtual Environment"
-text
-python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# macOS/Linux:
-source .venv/bin/activate
-"3) Install Dependencies"
-text
-pip install -U pip
-pip install streamlit python-dotenv mcp google-api-python-client google-auth-httplib2 google-auth-oauthlib openai
-Note: the openai package is used as a client because Perplexity exposes an OpenAI-compatible API.
 
-"4) Google OAuth Setup"
-Open Google Cloud Console → APIs & Services.
 
-Enable "Gmail API" and "Drive API".
+2️⃣ Install Dependencies
+pip install -r requirements.txt
 
-Create OAuth Client ID: Application type = Desktop app.
+3️⃣ Setup Google OAuth
 
-Download credentials JSON and save as credentials.json in the project root.
+Go to Google Cloud Console
+.
 
-If your consent screen is Testing, add your Google account as a Test user.
+Enable Gmail API and Google Drive API.
 
-"5) Perplexity API Key"
-Create a .env file and add:
+Create OAuth 2.0 Client Credentials and download credentials.json.
 
-text
-PPLX_API_KEY=your_perplexity_key_here
-(Optionally add OPENAI_API_KEY for provider switching.)
+Place it in the project root directory.
 
-"6) First-time OAuth Flow"
-text
+4️⃣ Add API Key to .env
+PPLX_API_KEY=your_perplexity_api_key_here
+
+
+(Perplexity’s API is OpenAI-compatible, so you can also use OPENAI_API_KEY if needed.)
+
+5️⃣ Run MCP Server
+python mvp.py
+
+
+If you need to authenticate first:
+
 python mvp.py --test-auth
-A browser will open; sign in and consent. If successful, a token.pickle will be saved for future runs.
 
-"7) Launch the Streamlit UI"
-text
+6️⃣ Run Streamlit Dashboard
 streamlit run app.py
-Select a tool (such as get_privacy_summary) and click Run.
-Complete OAuth when prompted.
-Real-time progress (e.g., “Processing message 7/10”) appears via server logs.
 
-"🔐 Scopes & Security"
-Works with only the following read-only scopes:
+7️⃣ Load Chrome Extension
 
-"https://www.googleapis.com/auth/gmail.readonly"
+Go to chrome://extensions/ → Enable Developer Mode.
 
-"https://www.googleapis.com/auth/drive.readonly"
+Click Load Unpacked → Select the chrome-extension/ folder.
 
-"https://www.googleapis.com/auth/drive.metadata.readonly"
+Visit any login page to see the privacy popup in action.
 
-No write/delete access—isolation by design.
+🔍 What It Checks
+🧾 Website Privacy Audit
 
-"🧭 What the MCP Tools Return"
-"check_gmail_privacy": raw Gmail metadata directly from the Gmail API (messages().get(..., format="full")): headers, subject, snippet, etc.
+Total cookies and tracker count.
 
-"check_drive_privacy": Drive files and permissions, including public/overshared/link-sharing flags.
+3rd-party scripts (analytics, pixels, etc).
 
-"get_privacy_summary": combines Gmail and Drive outputs as:
+Displays a red privacy popup warning with dismiss option.
 
-json
-{
-  "success": true,
-  "ts": "...",
-  "gmail_raw": [...],
-  "drive_raw": [...]
-}
-No AI runs on the server; the Streamlit client performs Gmail AI, Drive AI, and overall AI summaries.
+📧 Gmail
 
-"📈 Why MCP?"
-Traditionally, agents require m×n wiring between tools and endpoints.
-MCP standardizes on tools/list and tools/call, so integration is m+n once—resulting in cleaner, reusable, and audit-friendly code.
-Authorization (OAuth) stays inside the server, and any MCP-compatible client can reuse the workflow.
+Recent email metadata, subjects, and risky keywords.
 
-"📊 Streamlit UI Dashboard"
-Tab 1: "Metadata Sent to AI" – shows raw JSON transmitted to the risk analysis agent.
+AI identifies possible PII leaks (e.g., “SSN”, “password”, etc).
 
-Tab 2: "AI Analysis" – three sections for Gmail analysis, Drive analysis, and an overall summary.
+📂 Google Drive
 
-UI auto-refreshes when new privacy scan results are available.
+Files shared publicly or “Anyone with link”.
 
-Server stderr logs are live-parsed for progress updates.
+Sensitive filenames or keywords (e.g., “salary”, “passport”).
 
-"🪵 Logging & Progress"
-All tool actions and scan progress are output to stderr for transparency.
+🧠 AI Summaries
 
-UI updates live as scans proceed (e.g., “Checking Drive file permissions…”, “Processed 17 messages”).
+Aggregates Gmail + Drive + Website results.
 
-"🔮 Future Roadmap"
-Add connectors for Notion, Slack, and Dropbox
+Assigns risk score (Low / Medium / High / Critical).
 
-Add compliance checks for HIPAA and PCI-DSS
+Suggests remediation steps (e.g., restrict file access, redact content).
 
-Enable auto-remediation (e.g., restrict Drive file permissions)
+🧱 Tech Stack
+Layer	Technology
+Backend	Python 3.10+
+Integration	Model Context Protocol (MCP)
+APIs	Gmail + Drive (OAuth2)
+AI Analysis	Perplexity Sonar API (OpenAI-compatible)
+Frontend	Streamlit Dashboard
+Bridge	Flask
+Browser Agent	Chrome Extension
+🔒 Security & Privacy
 
-Add scheduling for daily/weekly privacy scans
+Local-first: OAuth tokens stored securely as token.pickle.
 
-Export PDF privacy reports for audit evidence
+Read-only scopes: uses only gmail.readonly and drive.readonly.
 
-Role-based dashboards for teams
+No data upload: all scanning and analysis happen locally.
 
-Multilingual compliance reports
+Optional AI layer: only anonymized structured metadata is sent to the API.
 
-AI-powered risk mitigation recommendations
+Safe UI: Chrome popup waits for user dismissal, never auto-closes critical alerts.
 
-Analytics hub for trend analysis
+💡 Example Use Case
 
-Blockchain audit trail for tamper-proof logging
+You’re preparing for GDPR or CCPA compliance:
 
-"🤝 Contributing"
-Pull requests are welcomed!
-To add a new source, implement an MCP tool in mvp.py that returns raw or structured metadata.
-The UI will automatically handle the AI analysis, offering a consistent and auditable workflow.
+Gmail Scan → detects emails with personal data references.
 
-"🏆 Impact"
-Reduces manual audit effort by 80%
+Drive Scan → identifies overshared public files.
 
-Detects real-time privacy/security risks in Gmail and Drive
+Website Audit → warns about third-party trackers on login pages.
 
-Empowers non-technical users with clear, actionable privacy insights
+AI Summary → explains risks and gives plain-English remediation steps.
 
-Enables privacy compliance for personal, educational, hackathon, or small enterprise use-cases
+Result → ✅ a full privacy audit report, ready for action.
 
-"📎 Links"
-GitHub Repo: "https://github.com/Keerthikach/MCP_Privacy_Compliance_Agent"
+📈 Why This Project Stands Out
 
-Demo Video: ""
+❌ Typical compliance tools → upload your data to the cloud.
+✅ This one stays local — your data never leaves your system.
 
-Hackathon Submission: ""
+✅ Extensible — easily add new tools like Slack, Notion, Dropbox.
+✅ AI-driven — risk scoring + natural-language explanations.
+✅ Unified UI — all sources displayed in a single Streamlit dashboard.
+✅ MCP-based — standardized, secure, and interoperable.
 
-"💬 Contact & Support"
-Questions, feedback, or PR ideas?
-Open an issue or reach out via GitHub Discussions.
+🧭 Future Scope – What's Next
+Feature	Description
+⚡ Real-time Alerts	Slack/Email notifications for high-risk findings.
+🧑‍💼 Enterprise Features	Role-based dashboards & team access control.
+📱 Mobile App Support	SDKs for mobile app privacy analysis.
+💬 AI-powered Compliance Assistant	Chat directly with your audit report.
+🛡 Privacy Guardian	Active intervention — block risky permissions automatically.
+🧰 Folder Structure
+MCP_Privacy_Compliance_Agent/
+│
+├── app.py                 # Streamlit dashboard
+├── mvp.py                 # MCP Server (Gmail, Drive tools)
+├── bridge.py              # Flask bridge for Chrome extension
+├── chrome-extension/      # Extension files
+│   ├── manifest.json
+│   ├── content.js
+│   ├── background.js
+│   └── icon.png
+├── requirements.txt
+├── .env                   # API keys
+├── credentials.json       # Google OAuth credentials
+└── token.pickle           # OAuth tokens (auto-generated)
+
+🤝 Contributing
+
+Contributions are welcome!
+
+Fork the repo.
+
+Create a feature branch (git checkout -b feature/new-tool).
+
+Implement your MCP tool (e.g., for Slack or Notion).
+
+Submit a PR with clear description & test proof.
+
+🪪 License
+
+MIT License © 2025 — Keerthikach
+
+⭐ Star this repo if you like privacy + AI infrastructure done right!
+git clone https://github.com/Keerthikach/MCP_Privacy_Compliance_Agent.git
+
+🧠 Built for secure, intelligent, and local privacy analysis.
