@@ -14,6 +14,9 @@ from typing import Any, Dict, Optional, Tuple, List
 import streamlit as st
 from dotenv import load_dotenv
 
+
+QUEUE_FILE = os.path.abspath(os.path.join(os.getcwd(), "bridge_queue.jsonl"))
+
 # Optional OpenAI-compatible client (Perplexity works via base_url)
 try:
     from openai import OpenAI
@@ -36,6 +39,7 @@ st.set_page_config(
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
 PPLX_API_KEY = os.getenv("PPLX_API_KEY") or st.secrets.get("PPLX_API_KEY")
+QUEUE_FILE = os.getenv("QUEUE_FILE") or os.path.join(os.getcwd(), "bridge_queue.jsonl")
 
 RE_PROGRESS = re.compile(r"Processing\s+(message|file)\s+(\d+)\s*/\s*(\d+)", re.I)
 REQUIRED_PIP_PKGS = [
@@ -316,6 +320,21 @@ def apply_custom_css():
         box-shadow: 0 5px 25px var(--glow-green);
     }
     
+    /* Bridge alert */
+    .bridge-alert {
+        background: linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(0, 255, 157, 0.2) 100%);
+        border: 2px solid var(--cyber-blue);
+        border-radius: 10px;
+        padding: 1rem;
+        margin: 1rem 0;
+        animation: bridgePulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes bridgePulse {
+        0%, 100% { box-shadow: 0 0 15px var(--glow-blue); }
+        50% { box-shadow: 0 0 25px var(--glow-blue); }
+    }
+    
     /* Code blocks */
     .stCodeBlock {
         background: var(--bg-primary) !important;
@@ -448,6 +467,16 @@ if "logbuf" not in st.session_state:
 if "last_error" not in st.session_state:
     st.session_state.last_error = None
 
+# Bridge-related session state
+if "last_bridge_ts" not in st.session_state:
+    st.session_state.last_bridge_ts = 0.0
+if "last_bridge_url" not in st.session_state:
+    st.session_state.last_bridge_url = ""
+if "auto_from_bridge" not in st.session_state:
+    st.session_state.auto_from_bridge = False
+if "listen_bridge" not in st.session_state:
+    st.session_state.listen_bridge = True    
+
 # ---------------------------------------------------------------------
 # Utilities: module checks + installer
 # ---------------------------------------------------------------------
@@ -470,6 +499,27 @@ def install_required_packages(pkgs: List[str]) -> str:
         return out
     except subprocess.CalledProcessError as e:
         return e.output or str(e)
+
+def read_last_queue_event() -> Optional[dict]:
+    """Read the last valid JSON event from the bridge queue file."""
+    path = QUEUE_FILE
+    if not os.path.exists(path):
+        return None
+    try:
+        last = None
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    last = json.loads(line)
+                except Exception:
+                    continue
+        return last
+    except Exception:
+        return None
+
 
 # ---------------------------------------------------------------------
 # MCP stdio runner
@@ -730,6 +780,25 @@ with st.sidebar:
     if st.button("🏠 Home", use_container_width=True, type="primary" if st.session_state.page == "home" else "secondary"):
         st.session_state.page = "home"
         st.rerun()
+    
+    # Bridge status in sidebar
+    st.markdown("---")
+    st.markdown("### 🔌 BRIDGE STATUS")
+
+    if st.session_state.last_bridge_url:
+        st.caption(f"Last URL: `{st.session_state.last_bridge_url[:50]}...`")
+    else:
+        st.caption("No URL received yet")
+
+    st.checkbox(
+        "🎧 Listen for URLs",
+        key="listen_bridge",                    # <— binds to session_state
+        help="Auto-detect URLs from Chrome extension"
+    )
+
+    if st.session_state.listen_bridge and st.session_state.page == "website":
+        st.caption(f"Queue: `{QUEUE_FILE}`")
+
 
 # ---------------------------------------------------------------------
 # HOME PAGE
@@ -957,7 +1026,6 @@ def show_gmail_page():
             st.session_state.payload = metadata_for_ai
             progress_bar.progress(100, text="✅ Complete")
             status_text.success("✅ Audit completed successfully!")
-            st.balloons()
             
         except TimeoutError as e:
             st.session_state.last_error = f"Timeout: {e}"
@@ -1096,24 +1164,51 @@ def show_website_page():
     if st.button("← Back to Home", type="secondary"):
         st.session_state.page = "home"
         st.rerun()
-    
+
     st.markdown("---")
     st.markdown('<div class="section-header">🌐 WEBSITE PRIVACY AUDIT</div>', unsafe_allow_html=True)
-    
+
+    # Check for new URLs from bridge (if listening is enabled in sidebar)
+    # Check for new URLs from bridge (if listening is enabled)
+    listen_bridge = st.session_state.listen_bridge
+    incoming_url = None
+
+    if listen_bridge:
+        ev = read_last_queue_event()
+        if ev and isinstance(ev, dict) and ev.get("type") == "website_url":
+            ts = float(ev.get("ts", 0) or 0)
+            if ts > float(st.session_state.last_bridge_ts or 0):
+                # New event!
+                st.session_state.last_bridge_ts = ts
+                st.session_state.last_bridge_url = ev.get("url", "") or ""
+                incoming_url = st.session_state.last_bridge_url
+                st.session_state.auto_from_bridge = True
+
+                st.markdown(f"""
+                <div class="bridge-alert">
+                    <strong>🔔 URL Received from Extension!</strong><br>
+                    <code>{incoming_url}</code><br>
+                    <small>Auto-starting scan...</small>
+                </div>
+                """, unsafe_allow_html=True)
+
+
     # Configuration panel
     st.markdown('<div class="config-panel">', unsafe_allow_html=True)
     st.markdown("### 🎯 TARGET CONFIGURATION")
-    
+
     col1, col2 = st.columns([3, 1])
     with col2:
         if st.session_state.runner and st.session_state.runner.initialized:
             st.markdown('<div class="status-indicator status-active">🟢 READY</div>', unsafe_allow_html=True)
         else:
             st.markdown('<div class="status-indicator status-idle">⚪ IDLE</div>', unsafe_allow_html=True)
-    
+
+    # URL input - use incoming URL if available, otherwise default
+    default_url = incoming_url if incoming_url else "https://example.com"
     url = st.text_input(
         "🔗 Target URL",
-        value="https://example.com",
+        value=default_url,
         placeholder="Enter website URL to audit...",
         help="Full URL including https://"
     )
@@ -1123,7 +1218,7 @@ def show_website_page():
         mode = st.selectbox(
             "🔍 Scan Mode",
             ["generic", "login", "signup"],
-            index=0,
+            index=1 if incoming_url else 0,  # Default to "login" if from extension
             help="Type of page to analyze"
         )
     with col2:
@@ -1135,30 +1230,36 @@ def show_website_page():
             step=1000,
             help="Time to wait for dynamic content"
         )
-    
+
     st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Scan mode descriptions
+
     mode_info = {
         "generic": "General website scan for cookies, trackers, and privacy policies",
         "login": "Focused analysis on login forms and authentication security",
         "signup": "Registration form analysis for PII collection and data minimization"
     }
     st.info(f"ℹ️ {mode_info.get(mode, '')}")
-    
-    # Run button
+
+    # Run button (manual)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        run_btn = st.button("▶️ START SCAN", use_container_width=True, type="primary", disabled=not can_run)
+        manual_run_btn = st.button("▶️ START SCAN", use_container_width=True, type="primary", disabled=not can_run)
+
+    # Auto-run if URL came from bridge
+    run_btn = manual_run_btn or st.session_state.auto_from_bridge
     
+    # Reset auto-run flag after using it
+    if st.session_state.auto_from_bridge:
+        st.session_state.auto_from_bridge = False
+
     # Progress section
     st.markdown("---")
     progress_bar = st.progress(0, text="⏸️ Idle")
     status_text = st.empty()
-    
+
     with st.expander("📊 Live Server Logs", expanded=False):
         live_log = st.empty()
-    
+
     def progress_cb(kind: str, cur: Optional[int], tot: Optional[int], raw_line: str):
         if raw_line:
             lines = (st.session_state.logbuf + raw_line + "\n").splitlines()[-200:]
@@ -1168,7 +1269,7 @@ def show_website_page():
             pct = int(cur / tot * 100)
             progress_bar.progress(pct, text=f"⚡ {kind.title()}: {cur}/{tot} ({pct}%)")
             status_text.markdown(f"**Processing**: `{cur}/{tot}` {kind}s")
-    
+
     # Execute scan
     if run_btn:
         st.session_state.web_payload = None
@@ -1176,26 +1277,26 @@ def show_website_page():
         st.session_state.last_error = None
         progress_bar.progress(0, text="🚀 Initializing...")
         status_text.write("🔄 Starting MCP server...")
-        
+
         need_new_runner = (not st.session_state.runner) or (st.session_state.runner.server_path != server_path)
         if need_new_runner and st.session_state.runner:
             st.session_state.runner.stop()
             st.session_state.runner = None
         if not st.session_state.runner:
             st.session_state.runner = MCPRunner(server_path, rpc_timeout=float(timeout))
-        
+
         runner: MCPRunner = st.session_state.runner
-        
+
         try:
             runner.rpc_timeout = float(timeout)
             runner.start()
             status_text.write("🔐 Initializing scan...")
             runner.ensure_initialized(progress_cb=progress_cb)
-            
+
             args = {"url": url, "mode": mode, "max_wait_ms": int(max_wait_ms)}
             with st.spinner("🔍 Scanning website..."):
                 result = runner.call_tool("check_website_privacy", args, progress_cb=progress_cb)
-            
+
             # Parse result
             content = result.get("content", [])
             if content and isinstance(content, list) and content[0].get("type") == "text":
@@ -1206,12 +1307,11 @@ def show_website_page():
                     web_payload = txt
             else:
                 web_payload = result
-            
+
             st.session_state.web_payload = web_payload
             progress_bar.progress(100, text="✅ Complete")
             status_text.success("✅ Website audit completed!")
-            st.balloons()
-            
+
         except TimeoutError as e:
             st.session_state.last_error = f"Timeout: {e}"
             status_text.error(st.session_state.last_error)
@@ -1220,24 +1320,23 @@ def show_website_page():
             st.session_state.last_error = f"Error: {e}"
             status_text.error(st.session_state.last_error)
             progress_bar.progress(0, text="❌ Error")
-    
+
     # Display results
     web_payload = st.session_state.web_payload
     if web_payload is not None:
         st.markdown("---")
         st.markdown('<div class="results-container">', unsafe_allow_html=True)
         st.markdown('<div class="section-header">📊 SCAN RESULTS</div>', unsafe_allow_html=True)
-        
+
         tabs = st.tabs(["📄 Raw Data", "🤖 AI Analysis", "💾 Export"])
-        
+
         with tabs[0]:
             st.markdown("#### 📄 WEBSITE AUDIT DATA")
             st.caption("Complete scan data from target website")
             st.json(web_payload)
-        
+
         with tabs[1]:
             st.markdown("#### 🤖 AI-POWERED ANALYSIS")
-            
             if not use_ai:
                 st.info("ℹ️ AI analysis is disabled. Enable it in the sidebar.")
             elif not OpenAI:
@@ -1250,12 +1349,11 @@ def show_website_page():
                     try:
                         client = OpenAI(api_key=pplx_key, base_url="https://api.perplexity.ai")
                         model_name = "sonar"
-                        
                         system_prompt = (
-                            "You are a privacy/compliance auditor. You have to simplify the content so that everyone understands it even people who aren't well versed with security and privacy schemes,"
-                            "Read the website audit JSON (dynamic or static) "
-                            "and produce a clear summary with:\n"
-                            "1) Consent & Cookies — were third-party/ads cookies set pre-consent? Summarize consent_analysis.verdict and key diffs.\n"
+                            "You are a privacy/compliance auditor. Simplify the content so everyone understands it, "
+                            "even people who aren't well-versed with security and privacy schemes. "
+                            "Read the website audit JSON (dynamic or static) and produce a clear summary with:\n"
+                            "1) Consent & Cookies — were third-party/ads cookies set pre-consent? Summarize consent/cookies and diffs.\n"
                             "2) Trackers/Third Parties — list notable thirdParty domains.\n"
                             "3) Forms & PII — summarize forms, PII types requested, and minimization concerns by mode (login/signup).\n"
                             "4) Security Headers — note HSTS/CSP/XFO presence and obvious misconfigurations.\n"
@@ -1263,7 +1361,6 @@ def show_website_page():
                             "6) Final Verdict — severity (low/medium/high) with prioritized actions.\n"
                             "Be concise, factual, and action-oriented. If evidence is weak or inconclusive, say so."
                         )
-                        
                         data_txt = json.dumps(web_payload, indent=2)
                         with st.spinner("🔍 Analyzing scan data..."):
                             resp = client.chat.completions.create(
@@ -1276,10 +1373,9 @@ def show_website_page():
                                 temperature=0.3,
                             )
                         st.success(resp.choices[0].message.content)
-                    
                     except Exception as e:
                         st.error(f"❌ API Error: {e}")
-        
+
         with tabs[2]:
             st.markdown("#### 💾 EXPORT OPTIONS")
             col1, col2 = st.columns(2)
@@ -1299,8 +1395,15 @@ def show_website_page():
                     mime="text/plain",
                     use_container_width=True
                 )
-        
+
         st.markdown('</div>', unsafe_allow_html=True)
+
+    # Auto-refresh when listening (check every 3 seconds)
+    if listen_bridge:
+        st_autorefresh = st.empty()
+        with st_autorefresh:
+            time.sleep(3)
+            st.rerun()
 
 # ---------------------------------------------------------------------
 # PAGE ROUTER
