@@ -822,6 +822,17 @@ def show_home_page():
     """, unsafe_allow_html=True)
     
     st.markdown("---")
+    st.markdown(
+    """
+    <div style="font-size: 0.9em; color: #888; margin-bottom: 1em;">
+        <span>
+            *Note: The Chrome Extension-based features work perfectly on your own machine but are not accessible from a deployed web version of this app, as browser extensions can only run in your local browser (developer mode). You can <b>see the full extension integration in our deployment/demo video</b> for a complete experience.
+        </span>
+    </div>
+    """,
+    unsafe_allow_html=True
+    )
+    st.markdown("---")
     
     # Feature cards
     col1, col2 = st.columns(2, gap="large")
