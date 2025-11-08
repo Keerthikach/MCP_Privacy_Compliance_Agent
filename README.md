@@ -7,7 +7,7 @@
 ## 🧩 Overview  
 
 **Privacy Checker** is an *AI-powered*, **local-first** privacy auditing tool that scans **websites**, **Gmail**, and **Google Drive** for privacy exposures.  
-It detects *cookies, trackers, and overshared files, and uses *AI to generate risk summaries and actionable compliance steps* — all inside a *Streamlit dashboard*.
+It detects *cookies, trackers, and overshared files, priacy compliance, PII exposure and many other safety concerns*, and uses *AI to generate risk summaries and actionable compliance steps* — all inside a *Streamlit dashboard*.
 
 Unlike typical compliance tools that upload your data to the cloud, this project runs *entirely on your local machine* using the **Model Context Protocol (MCP)** — ensuring your data and tokens stay secure.
 
